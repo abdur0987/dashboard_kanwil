@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type ElementType } from "react";
+import Link from "next/link";
 import {
   Area,
   AreaChart,
@@ -74,6 +75,7 @@ const navItems = [
   { label: "Video", href: "#video" },
   { label: "Kontak", href: "#kontak" },
   { label: "Lokasi", href: "#lokasi" },
+  { label: "Admin", href: "/admin" },
 ];
 
 export function DashboardExperience({ data }: DashboardExperienceProps) {
@@ -618,7 +620,11 @@ function SiteHeader() {
         <nav className="hidden items-center gap-1 md:flex">
           {navItems.map((item) => (
             <Button key={item.href} asChild variant="ghost" size="sm">
-              <a href={item.href}>{item.label}</a>
+              {item.href.startsWith("#") ? (
+                <a href={item.href}>{item.label}</a>
+              ) : (
+                <Link href={item.href}>{item.label}</Link>
+              )}
             </Button>
           ))}
         </nav>
@@ -635,14 +641,25 @@ function SiteHeader() {
       {open ? (
         <nav className="container grid gap-1 border-t border-white/50 bg-white/70 py-3 backdrop-blur-2xl md:hidden">
           {navItems.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="rounded-md px-3 py-2 text-sm font-medium hover:bg-white/60"
-              onClick={() => setOpen(false)}
-            >
-              {item.label}
-            </a>
+            item.href.startsWith("#") ? (
+              <a
+                key={item.href}
+                href={item.href}
+                className="rounded-md px-3 py-2 text-sm font-medium hover:bg-white/60"
+                onClick={() => setOpen(false)}
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-md px-3 py-2 text-sm font-medium hover:bg-white/60"
+                onClick={() => setOpen(false)}
+              >
+                {item.label}
+              </Link>
+            )
           ))}
         </nav>
       ) : null}
