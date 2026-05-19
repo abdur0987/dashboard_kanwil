@@ -25,10 +25,13 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Download,
   FileText,
   Globe2,
+  Landmark,
   Mail,
+  MapPinned,
   MapPin,
   Menu,
   Phone,
@@ -62,14 +65,15 @@ type DashboardExperienceProps = {
 };
 
 const chartColors = {
-  Kesehatan: "#0f766e",
-  Pendidikan: "#1d4ed8",
-  Ekonomi: "#d97706",
-  "Layanan Publik": "#be123c",
+  "Pendidikan Madrasah": "#0f766e",
+  "Bimas Islam": "#1d7f5f",
+  "Haji dan Umrah": "#ca8a04",
+  "Layanan Publik": "#1e3a8a",
 };
 
 const navItems = [
   { label: "Indikator", href: "#indikator" },
+  { label: "Agenda", href: "#agenda" },
   { label: "Dashboard", href: "#dashboard" },
   { label: "Publikasi", href: "#publikasi" },
   { label: "Video", href: "#video" },
@@ -136,6 +140,14 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
 
     return [category];
   }, [category, data.filters.categories]);
+
+  const comparisonData = useMemo(() => {
+    return filteredRows.slice(0, 6).map((row) => ({
+      ...row,
+      shortIndicator:
+        row.indicator.length > 30 ? `${row.indicator.slice(0, 30)}...` : row.indicator,
+    }));
+  }, [filteredRows]);
 
   const currentActivity = data.activities[currentSlide];
 
@@ -217,16 +229,16 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
 
       <section id="indikator" className="section-shell">
         <SectionHeading
-          eyebrow="Indikator strategis"
-          title="Ringkasan data prioritas instansi"
-          description="Kartu indikator menampilkan angka utama, sumber data, dan status validasi agar masyarakat dapat memahami informasi penting tanpa membuka banyak dokumen."
+          eyebrow="Indikator strategis Kanwil"
+          title="Ringkasan layanan Kementerian Agama Provinsi Lampung"
+          description="Kartu indikator menampilkan layanan PTSP, pendidikan madrasah, Bimas Islam, serta kesiapan haji dan umrah sebagai gambaran kinerja publik Kanwil."
         />
         <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {data.indicators.map((indicator) => (
             <Card key={indicator.id} className="group overflow-hidden">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="rounded-md border border-white/70 bg-white/50 p-2 text-primary shadow-sm backdrop-blur-xl transition group-hover:bg-white/80">
+                  <div className="rounded-md border border-white/70 bg-white/40 p-2 text-primary shadow-sm backdrop-blur-2xl transition group-hover:bg-white/60">
                     <BarChart3 className="h-5 w-5" aria-hidden />
                   </div>
                   <Badge variant={indicator.status === "aktif" ? "success" : "warning"}>
@@ -259,13 +271,96 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
         </div>
       </section>
 
+      <section id="agenda" className="section-shell pt-0">
+        <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+          <Card className="liquid-panel-dark overflow-hidden">
+            <CardHeader>
+              <div className="w-fit rounded-md border border-white/20 bg-white/15 p-2 text-amber-200 shadow-sm backdrop-blur-2xl">
+                <Landmark className="h-5 w-5" />
+              </div>
+              <CardTitle className="text-2xl leading-tight text-white">
+                Agenda Pimpinan
+              </CardTitle>
+              <CardDescription className="text-white/75">
+                Jadwal pimpinan dan koordinasi prioritas Kanwil Kementerian Agama
+                Provinsi Lampung untuk monitoring layanan minggu ini.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <ScheduleMetric label="Agenda" value={data.executiveSchedules.length} />
+                <ScheduleMetric
+                  label="Prioritas"
+                  value={
+                    data.executiveSchedules.filter(
+                      (schedule) => schedule.priority === "utama",
+                    ).length
+                  }
+                />
+                <ScheduleMetric
+                  label="Berjalan"
+                  value={
+                    data.executiveSchedules.filter(
+                      (schedule) => schedule.status === "berjalan",
+                    ).length
+                  }
+                />
+              </div>
+              <p className="mt-4 text-xs leading-5 text-white/65">
+                Data agenda bersifat contoh tampilan frontend dan siap diganti dengan
+                kalender pimpinan atau API internal.
+              </p>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3">
+            {data.executiveSchedules.map((schedule) => (
+              <Card key={schedule.id} className="shadow-none">
+                <CardContent className="grid gap-4 p-4 md:grid-cols-[150px_1fr_auto] md:items-center">
+                  <div>
+                    <Badge
+                      variant={schedule.priority === "utama" ? "success" : "outline"}
+                      className="mb-2 w-fit"
+                    >
+                      {priorityLabel(schedule.priority)}
+                    </Badge>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {schedule.date}
+                    </p>
+                    <p className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      {schedule.time}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold leading-snug text-slate-950">
+                      {schedule.title}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {schedule.unit}
+                    </p>
+                    <p className="mt-2 inline-flex items-start gap-1.5 text-sm text-emerald-800">
+                      <MapPinned className="mt-0.5 h-4 w-4 shrink-0" />
+                      {schedule.location}
+                    </p>
+                  </div>
+                  <Badge variant={schedule.status === "berjalan" ? "warning" : "outline"}>
+                    {statusLabel(schedule.status)}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="dashboard" className="liquid-band border-y border-white/60">
         <div className="section-shell">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <SectionHeading
               eyebrow="Dashboard interaktif"
-              title="Eksplorasi grafik, tabel, dan sumber data"
-              description="Gunakan filter untuk melihat perkembangan berdasarkan tahun, kategori, dan wilayah."
+              title="Grafik layanan Kanwil Kemenag Lampung"
+              description="Gunakan filter untuk melihat perkembangan berdasarkan tahun, bidang layanan, dan kabupaten/kota."
             />
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={downloadCsv}>
@@ -388,22 +483,35 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
               </Card>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
-              <Card>
-                <CardHeader>
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(360px,0.82fr)_minmax(560px,1.18fr)]">
+              <Card className="overflow-hidden">
+                <CardHeader className="pb-3">
                   <CardTitle>Perbandingan Data Tampil</CardTitle>
-                  <CardDescription>Nilai setiap indikator setelah filter diterapkan.</CardDescription>
+                  <CardDescription>
+                    Ringkasan indikator teratas dalam format horizontal agar mudah dibaca.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="h-[320px]">
-                  {filteredRows.length ? (
+                <CardContent className="h-[360px]">
+                  {comparisonData.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={filteredRows.slice(0, 8)}>
+                      <BarChart
+                        data={comparisonData}
+                        layout="vertical"
+                        margin={{ top: 8, right: 18, bottom: 8, left: 8 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.32)" />
-                        <XAxis dataKey="category" tickLine={false} axisLine={false} />
-                        <YAxis tickLine={false} axisLine={false} />
+                        <XAxis type="number" tickLine={false} axisLine={false} />
+                        <YAxis
+                          type="category"
+                          dataKey="shortIndicator"
+                          width={132}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 12 }}
+                        />
                         <Tooltip />
-                        <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                          {filteredRows.slice(0, 8).map((row) => (
+                        <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={18}>
+                          {comparisonData.map((row) => (
                             <Cell
                               key={row.id}
                               fill={chartColors[row.category as keyof typeof chartColors] ?? "#64748b"}
@@ -418,12 +526,14 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
+              <Card className="overflow-hidden">
+                <CardHeader className="pb-3">
                   <CardTitle>Tabel Data Indikator</CardTitle>
-                  <CardDescription>Sumber dan periode data tetap terlihat untuk transparansi.</CardDescription>
+                  <CardDescription>
+                    Sumber dan periode data tetap terlihat untuk transparansi.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="max-h-[560px] overflow-auto pr-3">
                   <DataTable rows={filteredRows} />
                 </CardContent>
               </Card>
@@ -440,8 +550,8 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
               style={{ backgroundImage: `url(${currentActivity.imageUrl})` }}
             >
               <div className="flex min-h-[380px] flex-col justify-end bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-white/5 p-5 text-white">
-                <div className="max-w-2xl rounded-lg border border-white/20 bg-white/10 p-4 shadow-glass backdrop-blur-2xl">
-                  <Badge className="mb-3 w-fit bg-white/20 text-white backdrop-blur">
+                <div className="max-w-2xl rounded-lg border border-white/25 bg-white/20 p-4 shadow-glass backdrop-blur-2xl">
+                  <Badge className="mb-3 w-fit bg-white/20 text-white backdrop-blur-2xl">
                     Slideshow Kegiatan
                   </Badge>
                   <h2 className="text-2xl font-bold md:text-3xl">
@@ -523,7 +633,7 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
                   <CardDescription>{publication.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between gap-3">
-                  <span className="rounded-md border border-white/70 bg-white/50 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
+                  <span className="rounded-md border border-white/70 bg-white/40 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-2xl">
                     {publication.fileLabel}
                   </span>
                   <Button variant="outline" size="sm">
@@ -609,12 +719,12 @@ function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-white/50 bg-white/60 shadow-sm backdrop-blur-2xl">
       <div className="container flex min-h-16 items-center justify-between gap-4">
         <a href="#" className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md border border-white/50 bg-primary/90 text-white shadow-sm backdrop-blur">
+          <div className="grid h-10 w-10 place-items-center rounded-md border border-white/50 bg-primary/90 text-white shadow-sm backdrop-blur-2xl">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <p className="font-bold leading-tight text-slate-900">Dashboard Digital</p>
-            <p className="text-xs text-muted-foreground">Instansi Pemerintah</p>
+            <p className="font-bold leading-tight text-slate-900">Dashboard Digital Kanwil</p>
+            <p className="text-xs text-muted-foreground">Kemenag Provinsi Lampung</p>
           </div>
         </a>
         <nav className="hidden items-center gap-1 md:flex">
@@ -673,27 +783,33 @@ function Hero() {
       className="relative bg-cover bg-center"
       style={{
         backgroundImage:
-          "linear-gradient(100deg, rgba(7, 20, 43, 0.9), rgba(14, 116, 144, 0.42), rgba(255, 255, 255, 0.08)), url(https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1600&q=80)",
+          "linear-gradient(100deg, rgba(2, 44, 34, 0.93), rgba(15, 118, 80, 0.56), rgba(202, 138, 4, 0.16)), url(https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1600&q=80)",
       }}
     >
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent" />
       <div className="container relative flex min-h-[460px] flex-col justify-center py-12 text-white md:min-h-[560px]">
-        <div className="max-w-4xl rounded-lg border border-white/20 bg-white/10 p-5 shadow-glass backdrop-blur-2xl md:p-7">
-          <Badge className="mb-5 w-fit bg-white/20 text-white backdrop-blur">
-            Portal data strategis dan layanan informasi
+        <div className="max-w-4xl rounded-lg border border-white/25 bg-white/20 p-5 shadow-glass backdrop-blur-2xl md:p-7">
+          <Badge className="mb-5 w-fit bg-white/20 text-white backdrop-blur-2xl">
+            Portal data strategis Kanwil Kemenag Lampung
           </Badge>
           <h1 className="max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
-            Dashboard Digital Instansi Pemerintah
+            Dashboard Digital Kanwil Kementerian Agama Provinsi Lampung
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-white/85 md:text-lg">
-            Satu halaman untuk memantau indikator prioritas, grafik, tabel, publikasi,
-            video informasi, kontak, dan lokasi resmi secara cepat.
+            Satu layar untuk memantau indikator layanan keagamaan, agenda pimpinan,
+            publikasi statistik, video informasi, kontak, dan lokasi resmi Kanwil.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button asChild size="lg">
               <a href="#dashboard">
                 Lihat Dashboard
                 <TrendingUp className="h-4 w-4" />
+              </a>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <a href="#agenda">
+                Agenda Pimpinan
+                <CalendarDays className="h-4 w-4" />
               </a>
             </Button>
             <Button asChild size="lg" variant="secondary">
@@ -741,13 +857,24 @@ function MetricCard({
   helper: string;
 }) {
   return (
-    <Card className="bg-white/50 shadow-none">
+    <Card className="shadow-none">
       <CardContent className="p-4">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         <p className="mt-2 text-3xl font-bold text-slate-950">{value}</p>
         <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function ScheduleMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-white/20 bg-white/10 p-3 shadow-sm backdrop-blur-2xl">
+      <p className="text-xs font-medium uppercase tracking-wide text-white/60">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+    </div>
   );
 }
 
@@ -794,9 +921,29 @@ function DataTable({ rows }: { rows: DashboardRow[] }) {
   );
 }
 
+function priorityLabel(priority: DashboardData["executiveSchedules"][number]["priority"]) {
+  const labels = {
+    utama: "Prioritas Utama",
+    koordinasi: "Koordinasi",
+    monitoring: "Monitoring",
+  };
+
+  return labels[priority];
+}
+
+function statusLabel(status: DashboardData["executiveSchedules"][number]["status"]) {
+  const labels = {
+    terjadwal: "Terjadwal",
+    berjalan: "Berjalan",
+    selesai: "Selesai",
+  };
+
+  return labels[status];
+}
+
 function EmptyState() {
   return (
-    <div className="grid min-h-[180px] place-items-center rounded-lg border border-dashed border-white/70 bg-white/40 p-6 text-center text-sm text-muted-foreground backdrop-blur-xl">
+    <div className="grid min-h-[180px] place-items-center rounded-lg border border-dashed border-white/70 bg-white/30 p-6 text-center text-sm text-muted-foreground backdrop-blur-2xl">
       Tidak ada data untuk kombinasi filter ini.
     </div>
   );
@@ -812,7 +959,7 @@ function ContactRow({
   value: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-md border border-white/70 bg-white/40 p-3 shadow-sm backdrop-blur-xl">
+    <div className="flex gap-3 rounded-md border border-white/70 bg-white/30 p-3 shadow-sm backdrop-blur-2xl">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -834,13 +981,13 @@ function Footer({ contact }: { contact: DashboardData["contact"] }) {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-bold">Dashboard Digital</p>
+              <p className="font-bold">Dashboard Digital Kanwil</p>
               <p className="text-sm text-white/70">{contact.institution}</p>
             </div>
           </div>
           <p className="mt-4 max-w-xl text-sm leading-6 text-white/70">
-            Media penyajian data strategis, publikasi, dan layanan informasi yang
-            mendukung transparansi serta keterbukaan data instansi.
+            Media penyajian agenda pimpinan, data strategis, publikasi statistik,
+            dan layanan informasi Kanwil Kementerian Agama Provinsi Lampung.
           </p>
         </div>
         <div>

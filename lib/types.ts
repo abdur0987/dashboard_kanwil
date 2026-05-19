@@ -27,9 +27,9 @@ export type DashboardRow = {
 
 export type ChartPoint = {
   year: number;
-  Kesehatan: number;
-  Pendidikan: number;
-  Ekonomi: number;
+  "Pendidikan Madrasah": number;
+  "Bimas Islam": number;
+  "Haji dan Umrah": number;
   "Layanan Publik": number;
 };
 
@@ -56,6 +56,17 @@ export type VideoItem = {
   embedUrl: string;
 };
 
+export type ExecutiveSchedule = {
+  id: number;
+  date: string;
+  time: string;
+  title: string;
+  unit: string;
+  location: string;
+  priority: "utama" | "koordinasi" | "monitoring";
+  status: "terjadwal" | "berjalan" | "selesai";
+};
+
 export type ContactInfo = {
   institution: string;
   address: string;
@@ -75,6 +86,7 @@ export type DashboardData = {
   publications: Publication[];
   activities: ActivitySlide[];
   videos: VideoItem[];
+  executiveSchedules: ExecutiveSchedule[];
   contact: ContactInfo;
   filters: {
     years: string[];

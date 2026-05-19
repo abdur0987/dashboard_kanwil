@@ -66,10 +66,21 @@ export function AdminExperience({ data }: AdminExperienceProps) {
       publications,
       activities,
       videos,
+      executiveSchedules: data.executiveSchedules,
       contact,
       filters: data.filters,
     }),
-    [activities, contact, data.chartSeries, data.filters, indicators, publications, rows, videos],
+    [
+      activities,
+      contact,
+      data.chartSeries,
+      data.executiveSchedules,
+      data.filters,
+      indicators,
+      publications,
+      rows,
+      videos,
+    ],
   );
 
   const stats = useMemo(() => {

@@ -51,6 +51,14 @@ const config = {
           ink: "#0f766e",
           soft: "#ccfbf1",
         },
+        emerald: {
+          ink: "#0f5132",
+          soft: "#dff5e8",
+        },
+        gold: {
+          ink: "#8a5a00",
+          soft: "#fff3c4",
+        },
         navy: {
           ink: "#12355b",
           soft: "#e8f1fb",

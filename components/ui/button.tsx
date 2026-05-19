@@ -10,12 +10,12 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "glass-button-shine bg-primary/90 text-primary-foreground shadow-sm backdrop-blur hover:bg-primary",
+          "glass-button-shine border border-emerald-700/20 bg-primary/90 text-primary-foreground shadow-sm backdrop-blur-2xl hover:bg-primary",
         secondary:
-          "glass-button-shine bg-secondary/90 text-secondary-foreground shadow-sm backdrop-blur hover:bg-secondary",
+          "glass-button-shine border border-amber-500/20 bg-secondary/90 text-secondary-foreground shadow-sm backdrop-blur-2xl hover:bg-secondary",
         outline:
-          "border border-white/70 bg-white/50 text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white/70",
-        ghost: "text-slate-700 hover:bg-white/40 hover:backdrop-blur-xl",
+          "glass-button-shine border border-white/70 bg-white/40 text-slate-800 shadow-sm backdrop-blur-2xl hover:bg-white/60",
+        ghost: "text-slate-700 hover:bg-white/30 hover:shadow-sm hover:backdrop-blur-2xl",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

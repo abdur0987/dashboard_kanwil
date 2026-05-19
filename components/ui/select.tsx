@@ -22,7 +22,7 @@ export function Select({ label, value, options, onChange, className }: SelectPro
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-white/70 bg-white/60 px-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-xl transition hover:bg-white/75 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+        className="h-11 rounded-md border border-white/70 bg-white/40 px-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-2xl transition hover:bg-white/60 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
