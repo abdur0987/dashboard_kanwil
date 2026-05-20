@@ -67,7 +67,7 @@ type DashboardExperienceProps = {
 const chartColors = {
   "Pendidikan Madrasah": "#0f766e",
   "Bimas Islam": "#1d7f5f",
-  "Haji dan Umrah": "#ca8a04",
+  "SPAK": "#ca8a04",
   "Layanan Publik": "#1e3a8a",
 };
 
@@ -231,7 +231,7 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
         <SectionHeading
           eyebrow="Indikator strategis Kanwil"
           title="Ringkasan layanan Kementerian Agama Provinsi Lampung"
-          description="Kartu indikator menampilkan layanan PTSP, pendidikan madrasah, Bimas Islam, serta kesiapan haji dan umrah sebagai gambaran kinerja publik Kanwil."
+          description="Kartu indikator menampilkan layanan PTSP, pendidikan madrasah, Bimas Islam, serta Survei Persepsi Anti Korupsi sebagai gambaran kinerja publik Kanwil."
         />
         <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {data.indicators.map((indicator) => (
@@ -253,9 +253,10 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
                   <div>
                     <p className="text-3xl font-bold text-slate-900">
                       {formatNumber(indicator.value)}
+                      {indicator.unit === "persen" ? "%" : ""}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {indicator.unit} - {indicator.year}
+                      Tahun {indicator.year}
                     </p>
                   </div>
                   <div className="rounded-md border border-white/60 bg-teal-soft/70 px-2.5 py-1.5 text-sm font-semibold text-teal-ink shadow-sm backdrop-blur">
@@ -344,9 +345,9 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
                       {schedule.location}
                     </p>
                   </div>
-                  <Badge variant={schedule.status === "berjalan" ? "warning" : "outline"}>
+                  <span className={statusBadgeClass(schedule.status)}>
                     {statusLabel(schedule.status)}
-                  </Badge>
+                  </span>
                 </CardContent>
               </Card>
             ))}
@@ -939,6 +940,21 @@ function statusLabel(status: DashboardData["executiveSchedules"][number]["status
   };
 
   return labels[status];
+}
+
+function statusBadgeClass(status: DashboardData["executiveSchedules"][number]["status"]) {
+  const base =
+    "inline-flex w-fit items-center justify-center rounded-md border px-3 py-1 text-sm font-semibold shadow-sm backdrop-blur-2xl";
+  const styles = {
+    berjalan:
+      "border-amber-300/70 bg-amber-100/70 text-amber-800 shadow-amber-900/5",
+    terjadwal:
+      "border-sky-300/70 bg-sky-100/70 text-sky-800 shadow-sky-900/5",
+    selesai:
+      "border-emerald-300/70 bg-emerald-100/70 text-emerald-800 shadow-emerald-900/5",
+  };
+
+  return `${base} ${styles[status]}`;
 }
 
 function EmptyState() {

@@ -4,19 +4,19 @@ const rows = [
   { id: 1, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Bandar Lampung", period: "Triwulan", year: 2026, value: 96.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
   { id: 2, indicator: "Madrasah terakreditasi A/B", category: "Pendidikan Madrasah", region: "Lampung Tengah", period: "Tahunan", year: 2026, value: 88.2, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 3, indicator: "KUA dengan layanan digital aktif", category: "Bimas Islam", region: "Lampung Selatan", period: "Semester", year: 2026, value: 91.5, unit: "persen", source: "Bidang Bimas Islam" },
-  { id: 4, indicator: "Dokumen calon jemaah haji tervalidasi", category: "Haji dan Umrah", region: "Metro", period: "Bulanan", year: 2026, value: 94.8, unit: "persen", source: "Bidang PHU" },
+  { id: 4, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2026, value: 94.8, unit: "persen", source: "Bidang Ortala" },
   { id: 5, indicator: "Layanan pengaduan ditindaklanjuti", category: "Layanan Publik", region: "Pringsewu", period: "Triwulan", year: 2025, value: 92.1, unit: "persen", source: "Subbag Umum dan Humas" },
   { id: 6, indicator: "Guru madrasah mengikuti pembinaan", category: "Pendidikan Madrasah", region: "Pesawaran", period: "Semester", year: 2025, value: 84.7, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 7, indicator: "Bimbingan keluarga sakinah terlaksana", category: "Bimas Islam", region: "Tulang Bawang Barat", period: "Tahunan", year: 2025, value: 78.9, unit: "persen", source: "Bidang Bimas Islam" },
-  { id: 8, indicator: "Manasik haji kabupaten/kota terlaksana", category: "Haji dan Umrah", region: "Pesisir Barat", period: "Tahunan", year: 2025, value: 86.5, unit: "persen", source: "Bidang PHU" },
+  { id: 8, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2025, value: 86.5, unit: "persen", source: "Bidang Ortala" },
   { id: 9, indicator: "Kunjungan portal informasi Kanwil", category: "Layanan Publik", region: "Semua Wilayah", period: "Bulanan", year: 2024, value: 132.4, unit: "ribu", source: "Analytics Website Kanwil" },
   { id: 10, indicator: "Madrasah memakai pelaporan digital", category: "Pendidikan Madrasah", region: "Mesuji", period: "Tahunan", year: 2024, value: 81.2, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 11, indicator: "KUA revitalisasi layanan", category: "Bimas Islam", region: "Bandar Lampung", period: "Tahunan", year: 2024, value: 75.6, unit: "persen", source: "Bidang Bimas Islam" },
-  { id: 12, indicator: "Pendaftaran haji diproses digital", category: "Haji dan Umrah", region: "Pringsewu", period: "Tahunan", year: 2024, value: 82.3, unit: "persen", source: "Bidang PHU" },
+  { id: 12, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2024, value: 82.3, unit: "persen", source: "Bidang Ortala" },
   { id: 13, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Semua Wilayah", period: "Tahunan", year: 2023, value: 87.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
   { id: 14, indicator: "Madrasah terakreditasi A/B", category: "Pendidikan Madrasah", region: "Metro", period: "Tahunan", year: 2023, value: 79.9, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 15, indicator: "KUA dengan layanan digital aktif", category: "Bimas Islam", region: "Pesawaran", period: "Tahunan", year: 2023, value: 72.8, unit: "persen", source: "Bidang Bimas Islam" },
-  { id: 16, indicator: "Dokumen calon jemaah haji tervalidasi", category: "Haji dan Umrah", region: "Lampung Selatan", period: "Tahunan", year: 2023, value: 80.1, unit: "persen", source: "Bidang PHU" },
+  { id: 16, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2023, value: 80.1, unit: "persen", source: "Bidang Ortala" },
 ];
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -60,11 +60,11 @@ export async function getDashboardData(): Promise<DashboardData> {
       },
       {
         id: 4,
-        name: "Kesiapan Haji dan Umrah",
-        description: "Validasi dokumen, manasik, dan layanan keberangkatan jemaah haji wilayah Lampung.",
-        category: "Haji dan Umrah",
+        name: "Survei Persepsi Anti Korupsi",
+        description: "Indeks penilaian layananan anti korupsi Kanwil Kemenag Provinsi Lampung.",
+        category: "SPAK",
         unit: "persen",
-        source: "Bidang Penyelenggaraan Haji dan Umrah",
+        source: "Bidang Ortala",
         year: 2026,
         value: 94.8,
         trend: 2.7,
@@ -73,10 +73,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     ],
     rows,
     chartSeries: [
-      { year: 2023, "Pendidikan Madrasah": 79.9, "Bimas Islam": 72.8, "Haji dan Umrah": 80.1, "Layanan Publik": 87.4 },
-      { year: 2024, "Pendidikan Madrasah": 81.2, "Bimas Islam": 75.6, "Haji dan Umrah": 82.3, "Layanan Publik": 92.4 },
-      { year: 2025, "Pendidikan Madrasah": 84.7, "Bimas Islam": 78.9, "Haji dan Umrah": 86.5, "Layanan Publik": 92.1 },
-      { year: 2026, "Pendidikan Madrasah": 88.2, "Bimas Islam": 91.5, "Haji dan Umrah": 94.8, "Layanan Publik": 96.4 },
+      { year: 2023, "Pendidikan Madrasah": 79.9, "Bimas Islam": 72.8, "SPAK": 80.1, "Layanan Publik": 87.4 },
+      { year: 2024, "Pendidikan Madrasah": 81.2, "Bimas Islam": 75.6, "SPAK": 82.3, "Layanan Publik": 92.4 },
+      { year: 2025, "Pendidikan Madrasah": 84.7, "Bimas Islam": 78.9, "SPAK": 86.5, "Layanan Publik": 92.1 },
+      { year: 2026, "Pendidikan Madrasah": 88.2, "Bimas Islam": 91.5, "SPAK": 94.8, "Layanan Publik": 96.4 },
     ],
     executiveSchedules: [
       {
@@ -103,18 +103,18 @@ export async function getDashboardData(): Promise<DashboardData> {
         id: 3,
         date: "Selasa, 19 Mei 2026",
         time: "09.30 WIB",
-        title: "Monitoring layanan Kankemenag Bandar Lampung",
+        title: "Monitoring layanan Kankemenag Kota Bandar Lampung",
         unit: "Tim Kanwil dan Kankemenag Kota Bandar Lampung",
         location: "Jalan P. Emir Moh. Noer No.81, Telukbetung Selatan",
         priority: "monitoring",
-        status: "terjadwal",
+        status: "selesai",
       },
       {
         id: 4,
         date: "Rabu, 20 Mei 2026",
         time: "13.30 WIB",
-        title: "Pembinaan layanan haji dan KUA wilayah Metro",
-        unit: "Bidang PHU, Bimas Islam, Kankemenag Metro",
+        title: "Monitoring layanan Kankemenag Kota Metro",
+        unit: "Tim Kanwil dan Kankemenag Kota Metro",
         location: "Jalan Ki. Arsyad No. 6 Kota Metro",
         priority: "utama",
         status: "terjadwal",
@@ -156,7 +156,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       {
         id: 2,
         title: "Koordinasi data statistik keagamaan",
-        caption: "Sinkronisasi data madrasah, KUA, haji, dan layanan publik untuk dashboard Kanwil.",
+        caption: "Sinkronisasi data madrasah, KUA, dan layanan publik untuk dashboard Kanwil.",
         imageUrl: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80",
       },
       {
@@ -187,8 +187,8 @@ export async function getDashboardData(): Promise<DashboardData> {
     },
     filters: {
       years: ["Semua Tahun", "2026", "2025", "2024", "2023"],
-      categories: ["Semua Kategori", "Pendidikan Madrasah", "Bimas Islam", "Haji dan Umrah", "Layanan Publik"],
-      regions: ["Semua Wilayah", "Bandar Lampung", "Metro", "Pringsewu", "Pesawaran", "Mesuji", "Tulang Bawang Barat", "Pesisir Barat", "Lampung Selatan", "Lampung Tengah"],
+      categories: ["Semua Kategori", "Pendidikan Madrasah", "Bimas Islam", "SPAK", "Layanan Publik"],
+      regions: ["Semua Wilayah", "Kanwil Lampung", "Bandar Lampung", "Metro", "Pringsewu", "Pesawaran", "Mesuji", "Tulang Bawang Barat", "Pesisir Barat", "Lampung Selatan", "Lampung Tengah"],
     },
   };
 }

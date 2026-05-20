@@ -29,7 +29,7 @@ export type ChartPoint = {
   year: number;
   "Pendidikan Madrasah": number;
   "Bimas Islam": number;
-  "Haji dan Umrah": number;
+  "SPAK": number;
   "Layanan Publik": number;
 };
 
