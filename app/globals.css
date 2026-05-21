@@ -164,6 +164,69 @@
       0 12px 28px rgba(14, 116, 84, 0.16);
   }
 
+  .liquid-chart-card {
+    background:
+      radial-gradient(120% 90% at 16% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 54%),
+      radial-gradient(90% 70% at 92% 8%, rgba(255, 228, 145, 0.24), rgba(255, 228, 145, 0) 64%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(234, 249, 241, 0.36) 54%, rgba(255, 255, 255, 0.62));
+  }
+
+  .liquid-chart-card::before {
+    background:
+      linear-gradient(118deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0) 34%),
+      radial-gradient(95% 80% at 18% 0%, rgba(145, 255, 216, 0.22), rgba(145, 255, 216, 0) 62%);
+    opacity: 0.96;
+  }
+
+  .liquid-chart-stat {
+    @apply rounded-md border border-white/70 bg-white/35 px-3 py-2 shadow-sm backdrop-blur-2xl;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 12px 28px rgba(10, 80, 59, 0.08);
+  }
+
+  .liquid-chart-stat span {
+    @apply block text-[0.64rem] font-semibold uppercase tracking-[0.14em] text-emerald-800/70;
+  }
+
+  .liquid-chart-stat strong {
+    @apply mt-1 block truncate text-lg font-bold leading-none text-slate-950;
+  }
+
+  .liquid-chart-frame {
+    @apply relative overflow-hidden rounded-lg border border-white/70 bg-white/25 p-3 shadow-sm backdrop-blur-2xl;
+    background:
+      radial-gradient(120% 76% at 50% -12%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0) 56%),
+      radial-gradient(90% 70% at 100% 20%, rgba(252, 211, 77, 0.18), rgba(252, 211, 77, 0) 64%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(232, 250, 240, 0.3));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+      0 20px 54px rgba(10, 80, 59, 0.1);
+  }
+
+  .liquid-chart-frame::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(var(--radius) - 1px);
+    background:
+      linear-gradient(120deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0) 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(16, 185, 129, 0.04));
+    pointer-events: none;
+  }
+
+  .liquid-chart-frame::after {
+    content: "";
+    position: absolute;
+    inset: auto 8% -42% 8%;
+    height: 56%;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.08);
+    filter: blur(28px);
+    pointer-events: none;
+  }
+
   .liquid-award-carousel {
     @apply relative isolate overflow-hidden rounded-lg border border-white/70 bg-white/40 shadow-glass backdrop-blur-2xl;
     background:

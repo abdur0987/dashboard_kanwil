@@ -67,11 +67,15 @@ type DashboardExperienceProps = {
 };
 
 const chartColors = {
-  "Pendidikan Madrasah": "#0f766e",
-  "Bimas Islam": "#1d7f5f",
-  "SPAK": "#ca8a04",
-  "Layanan Publik": "#1e3a8a",
+  "Pendidikan Madrasah": "#0d9488",
+  "Bimas Islam": "#22c55e",
+  "SPAK": "#f59e0b",
+  "Layanan Publik": "#2563eb",
 };
+
+function getChartGradientId(category: string) {
+  return `fill-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
 
 const navItems = [
   { label: "Penghargaan", href: "#penghargaan" },
@@ -143,6 +147,36 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
 
     return [category];
   }, [category, data.filters.categories]);
+
+  const trendSnapshot = useMemo(() => {
+    const latestPoint = chartSeries[chartSeries.length - 1];
+
+    if (!latestPoint) {
+      return {
+        latestYear: "-",
+        average: 0,
+        strongestCategory: "-",
+        strongestValue: 0,
+      };
+    }
+
+    const values = visibleCategories.map((item) => ({
+      category: item,
+      value: Number((latestPoint as unknown as Record<string, number>)[item] ?? 0),
+    }));
+    const total = values.reduce((sum, item) => sum + item.value, 0);
+    const strongest = values.reduce(
+      (selected, item) => (item.value > selected.value ? item : selected),
+      values[0] ?? { category: "-", value: 0 },
+    );
+
+    return {
+      latestYear: latestPoint.year,
+      average: values.length ? total / values.length : 0,
+      strongestCategory: strongest.category,
+      strongestValue: strongest.value,
+    };
+  }, [chartSeries, visibleCategories]);
 
   const comparisonData = useMemo(() => {
     return filteredRows.slice(0, 6).map((row) => ({
@@ -417,39 +451,137 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tren Indikator per Tahun</CardTitle>
-                  <CardDescription>Legenda menunjukkan kategori data strategis.</CardDescription>
+              <Card className="liquid-chart-card overflow-hidden">
+                <CardHeader className="relative pb-3">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <CardTitle>Tren Indikator per Tahun</CardTitle>
+                      <CardDescription className="mt-2">
+                        Legenda menunjukkan kategori data strategis dengan visual Liquid Glass.
+                      </CardDescription>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[360px]">
+                      <div className="liquid-chart-stat">
+                        <span>Tahun</span>
+                        <strong>{trendSnapshot.latestYear}</strong>
+                      </div>
+                      <div className="liquid-chart-stat">
+                        <span>Rata-rata</span>
+                        <strong>{formatNumber(trendSnapshot.average)}</strong>
+                      </div>
+                      <div className="liquid-chart-stat">
+                        <span>Tertinggi</span>
+                        <strong>{formatNumber(trendSnapshot.strongestValue)}</strong>
+                      </div>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent className="h-[340px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartSeries}>
-                      <defs>
-                        {visibleCategories.map((item) => (
-                          <linearGradient key={item} id={`fill-${item}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={chartColors[item as keyof typeof chartColors]} stopOpacity={0.35} />
-                            <stop offset="95%" stopColor={chartColors[item as keyof typeof chartColors]} stopOpacity={0.03} />
-                          </linearGradient>
-                        ))}
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.32)" />
-                      <XAxis dataKey="year" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} />
-                      <Tooltip />
-                      <Legend />
-                      {visibleCategories.map((item) => (
-                        <Area
-                          key={item}
-                          type="monotone"
-                          dataKey={item}
-                          stroke={chartColors[item as keyof typeof chartColors]}
-                          fill={`url(#fill-${item})`}
-                          strokeWidth={2}
+                <CardContent className="p-4 pt-0">
+                  <div className="liquid-chart-frame h-[360px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={chartSeries}
+                        margin={{ top: 22, right: 22, bottom: 8, left: -8 }}
+                      >
+                        <defs>
+                          {visibleCategories.map((item) => (
+                            <linearGradient
+                              key={item}
+                              id={getChartGradientId(item)}
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="0%"
+                                stopColor={chartColors[item as keyof typeof chartColors]}
+                                stopOpacity={0.18}
+                              />
+                              <stop
+                                offset="62%"
+                                stopColor={chartColors[item as keyof typeof chartColors]}
+                                stopOpacity={0.06}
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor={chartColors[item as keyof typeof chartColors]}
+                                stopOpacity={0}
+                              />
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <CartesianGrid
+                          vertical={false}
+                          strokeDasharray="4 10"
+                          stroke="rgba(15, 81, 50, 0.16)"
                         />
-                      ))}
-                    </AreaChart>
-                  </ResponsiveContainer>
+                        <XAxis
+                          dataKey="year"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12, fontWeight: 600 }}
+                          tickMargin={12}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#64748b", fontSize: 12, fontWeight: 600 }}
+                          tickMargin={8}
+                        />
+                        <Tooltip
+                          cursor={{
+                            stroke: "rgba(15, 81, 50, 0.28)",
+                            strokeDasharray: "6 6",
+                          }}
+                          contentStyle={{
+                            background: "rgba(255, 255, 255, 0.72)",
+                            border: "1px solid rgba(255, 255, 255, 0.82)",
+                            borderRadius: "12px",
+                            boxShadow: "0 22px 54px rgba(10, 80, 59, 0.16)",
+                            backdropFilter: "blur(18px)",
+                          }}
+                          labelStyle={{ color: "#0f172a", fontWeight: 700 }}
+                          itemStyle={{ fontWeight: 600 }}
+                        />
+                        <Legend
+                          iconType="circle"
+                          wrapperStyle={{
+                            paddingTop: 14,
+                            color: "#334155",
+                            fontWeight: 600,
+                          }}
+                        />
+                        {visibleCategories.map((item) => (
+                          <Area
+                            key={item}
+                            type="monotone"
+                            dataKey={item}
+                            stroke={chartColors[item as keyof typeof chartColors]}
+                            fill={`url(#${getChartGradientId(item)})`}
+                            fillOpacity={1}
+                            strokeOpacity={0.95}
+                            strokeWidth={3}
+                            dot={{
+                              r: 3,
+                              strokeWidth: 2,
+                              fill: "#ffffff",
+                              stroke: chartColors[item as keyof typeof chartColors],
+                            }}
+                            activeDot={{
+                              r: 6,
+                              strokeWidth: 3,
+                              fill: "#ffffff",
+                              stroke: chartColors[item as keyof typeof chartColors],
+                            }}
+                          />
+                        ))}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute right-4 top-4 hidden rounded-md border border-white/70 bg-white/40 px-3 py-2 text-xs font-semibold text-emerald-900 shadow-sm backdrop-blur-2xl md:block">
+                      Fokus: {trendSnapshot.strongestCategory}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
