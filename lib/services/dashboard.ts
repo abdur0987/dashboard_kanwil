@@ -120,6 +120,72 @@ export async function getDashboardData(): Promise<DashboardData> {
         status: "terjadwal",
       },
     ],
+    awardCollections: [
+      {
+        id: "capaian-kanwil",
+        title: "Koleksi Penghargaan Capaian Kanwil",
+        description:
+          "Dokumentasi capaian kinerja Kanwil Kementerian Agama Provinsi Lampung sebagai apresiasi atas layanan dan tata kelola.",
+        items: [
+          {
+            id: 1,
+            title: "Kinerja Realisasi Anggaran",
+            description: "Piagam penghargaan capaian Kanwil untuk kinerja realisasi anggaran.",
+            year: 2026,
+            imageUrl: "/awards/capaian-kanwil.webp",
+            alt: "Piagam penghargaan capaian Kanwil Kementerian Agama Provinsi Lampung",
+          },
+          {
+            id: 2,
+            title: "Capaian Kanwil Lampung",
+            description: "Arsip visual penghargaan capaian kinerja Kanwil Lampung.",
+            year: 2026,
+            imageUrl: "/awards/capaian-kanwil.webp",
+            alt: "Dokumentasi penghargaan capaian Kanwil Lampung",
+          },
+          {
+            id: 3,
+            title: "Apresiasi Kinerja Kanwil",
+            description: "Koleksi sementara untuk tampilan frontend galeri penghargaan.",
+            year: 2026,
+            imageUrl: "/awards/capaian-kanwil.webp",
+            alt: "Koleksi penghargaan capaian Kanwil",
+          },
+        ],
+      },
+      {
+        id: "ppid",
+        title: "Koleksi Penghargaan PPID",
+        description:
+          "PPID adalah Pejabat Pengelola Informasi dan Dokumentasi, kanal pengelolaan informasi publik dan dokumentasi resmi.",
+        items: [
+          {
+            id: 1,
+            title: "Penghargaan PPID Kanwil",
+            description: "Dokumentasi penerimaan penghargaan PPID Kanwil Kemenag Lampung.",
+            year: 2026,
+            imageUrl: "/awards/ppid.webp",
+            alt: "Penghargaan PPID Kanwil Kementerian Agama Provinsi Lampung",
+          },
+          {
+            id: 2,
+            title: "Apresiasi Keterbukaan Informasi",
+            description: "Koleksi penghargaan Pejabat Pengelola Informasi dan Dokumentasi.",
+            year: 2026,
+            imageUrl: "/awards/ppid.webp",
+            alt: "Apresiasi keterbukaan informasi PPID Kanwil Lampung",
+          },
+          {
+            id: 3,
+            title: "Dokumentasi PPID",
+            description: "Koleksi sementara untuk tampilan frontend galeri PPID.",
+            year: 2026,
+            imageUrl: "/awards/ppid.webp",
+            alt: "Dokumentasi penghargaan PPID",
+          },
+        ],
+      },
+    ],
     publications: [
       {
         id: 1,

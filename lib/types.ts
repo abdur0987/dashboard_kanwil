@@ -67,6 +67,22 @@ export type ExecutiveSchedule = {
   status: "terjadwal" | "berjalan" | "selesai";
 };
 
+export type AwardItem = {
+  id: number;
+  title: string;
+  description: string;
+  year: number;
+  imageUrl: string;
+  alt: string;
+};
+
+export type AwardCollection = {
+  id: string;
+  title: string;
+  description: string;
+  items: AwardItem[];
+};
+
 export type ContactInfo = {
   institution: string;
   address: string;
@@ -87,6 +103,7 @@ export type DashboardData = {
   activities: ActivitySlide[];
   videos: VideoItem[];
   executiveSchedules: ExecutiveSchedule[];
+  awardCollections: AwardCollection[];
   contact: ContactInfo;
   filters: {
     years: string[];

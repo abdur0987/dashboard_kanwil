@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, type ElementType } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Area,
   AreaChart,
@@ -20,6 +21,7 @@ import {
 import {
   ArrowDownToLine,
   ArrowUpRight,
+  Award,
   BarChart3,
   Building2,
   CalendarDays,
@@ -72,6 +74,7 @@ const chartColors = {
 };
 
 const navItems = [
+  { label: "Penghargaan", href: "#penghargaan" },
   { label: "Indikator", href: "#indikator" },
   { label: "Agenda", href: "#agenda" },
   { label: "Dashboard", href: "#dashboard" },
@@ -226,6 +229,7 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
       <TopBar contact={data.contact} />
       <SiteHeader />
       <Hero />
+      <AwardsSection collections={data.awardCollections} />
 
       <section id="indikator" className="section-shell">
         <SectionHeading
@@ -845,6 +849,86 @@ function SectionHeading({
         {description}
       </p>
     </div>
+  );
+}
+
+function AwardsSection({
+  collections,
+}: {
+  collections: DashboardData["awardCollections"];
+}) {
+  return (
+    <section id="penghargaan" className="section-shell pt-8 md:pt-12">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <SectionHeading
+          eyebrow="Penghargaan Kanwil"
+          title="Koleksi capaian dan penghargaan PPID"
+          description="Galeri penghargaan ditampilkan di bagian atas sebagai etalase prestasi Kanwil Kemenag Lampung. PPID adalah Pejabat Pengelola Informasi dan Dokumentasi."
+        />
+        <Badge variant="outline" className="w-fit">
+          2 Koleksi
+        </Badge>
+      </div>
+
+      <div className="mt-7 grid gap-5">
+        {collections.map((collection) => (
+          <Card key={collection.id} className="overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="mb-3 w-fit rounded-md border border-white/70 bg-white/40 p-2 text-primary shadow-sm backdrop-blur-2xl">
+                    <Award className="h-5 w-5" />
+                  </div>
+                  <CardTitle className="text-xl leading-tight">
+                    {collection.title}
+                  </CardTitle>
+                  <CardDescription className="mt-2 max-w-3xl">
+                    {collection.description}
+                  </CardDescription>
+                </div>
+                <Badge variant={collection.id === "ppid" ? "success" : "outline"}>
+                  {collection.items.length} Foto
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                {collection.items.map((award) => (
+                  <article
+                    key={`${collection.id}-${award.id}`}
+                    className="group overflow-hidden rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-2xl transition duration-300 hover:-translate-y-0.5"
+                  >
+                    <div className="relative aspect-[4/3] overflow-hidden bg-white/30">
+                      <Image
+                        src={award.imageUrl}
+                        alt={award.alt}
+                        fill
+                        sizes="(min-width: 768px) 33vw, 100vw"
+                        className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <Badge variant="outline">{award.year}</Badge>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                          {collection.id === "ppid" ? "PPID" : "Capaian"}
+                        </span>
+                      </div>
+                      <h3 className="font-semibold leading-snug text-slate-950">
+                        {award.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {award.description}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
   );
 }
 
