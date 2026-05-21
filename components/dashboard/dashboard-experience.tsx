@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ElementType } from "react";
+import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -870,65 +870,158 @@ function AwardsSection({
         </Badge>
       </div>
 
-      <div className="mt-7 grid gap-5">
+      <div className="mt-7 grid gap-5 xl:grid-cols-2">
         {collections.map((collection) => (
-          <Card key={collection.id} className="overflow-hidden">
-            <CardHeader className="pb-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <div className="mb-3 w-fit rounded-md border border-white/70 bg-white/40 p-2 text-primary shadow-sm backdrop-blur-2xl">
-                    <Award className="h-5 w-5" />
-                  </div>
-                  <CardTitle className="text-xl leading-tight">
-                    {collection.title}
-                  </CardTitle>
-                  <CardDescription className="mt-2 max-w-3xl">
-                    {collection.description}
-                  </CardDescription>
-                </div>
-                <Badge variant={collection.id === "ppid" ? "success" : "outline"}>
-                  {collection.items.length} Foto
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                {collection.items.map((award) => (
-                  <article
-                    key={`${collection.id}-${award.id}`}
-                    className="group overflow-hidden rounded-lg border border-white/70 bg-white/35 shadow-sm backdrop-blur-2xl transition duration-300 hover:-translate-y-0.5"
-                  >
-                    <div className="relative aspect-[4/3] overflow-hidden bg-white/30">
-                      <Image
-                        src={award.imageUrl}
-                        alt={award.alt}
-                        fill
-                        sizes="(min-width: 768px) 33vw, 100vw"
-                        className="object-cover transition duration-500 group-hover:scale-[1.03]"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <Badge variant="outline">{award.year}</Badge>
-                        <span className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
-                          {collection.id === "ppid" ? "PPID" : "Capaian"}
-                        </span>
-                      </div>
-                      <h3 className="font-semibold leading-snug text-slate-950">
-                        {award.title}
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        {award.description}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <AwardCarousel
+            key={collection.id}
+            collection={collection}
+            delay={collection.id === "ppid" ? 5200 : 4600}
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+function AwardCarousel({
+  collection,
+  delay,
+}: {
+  collection: DashboardData["awardCollections"][number];
+  delay: number;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeAward = collection.items[activeIndex] ?? collection.items[0];
+  const totalItems = collection.items.length;
+  const accentLabel = collection.id === "ppid" ? "PPID" : "Capaian Kanwil";
+
+  useEffect(() => {
+    if (totalItems <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % totalItems);
+    }, delay);
+
+    return () => window.clearInterval(timer);
+  }, [delay, totalItems]);
+
+  const showPrevious = () => {
+    setActiveIndex((current) => (current - 1 + totalItems) % totalItems);
+  };
+
+  const showNext = () => {
+    setActiveIndex((current) => (current + 1) % totalItems);
+  };
+
+  if (!activeAward) return null;
+
+  return (
+    <article className="liquid-award-carousel">
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="rounded-md border border-white/70 bg-white/40 p-2 text-primary shadow-sm backdrop-blur-2xl">
+                <Award className="h-5 w-5" />
+              </span>
+              <Badge variant={collection.id === "ppid" ? "success" : "outline"}>
+                {totalItems} Foto
+              </Badge>
+            </div>
+            <h3 className="text-xl font-bold leading-tight tracking-normal text-slate-950">
+              {collection.title}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {collection.description}
+            </p>
+          </div>
+          <div className="hidden whitespace-nowrap rounded-md border border-white/70 bg-white/40 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-emerald-800 shadow-sm backdrop-blur-2xl sm:block">
+            Slide {activeIndex + 1}/{totalItems}
+          </div>
+        </div>
+
+        <div className="liquid-award-stage group">
+          <Image
+            key={`${collection.id}-${activeAward.id}`}
+            src={activeAward.imageUrl}
+            alt={activeAward.alt}
+            fill
+            sizes="(min-width: 1280px) 50vw, 100vw"
+            className="object-cover transition duration-700 group-hover:scale-[1.02]"
+            priority={collection.id === "capaian-kanwil"}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/12 to-white/10" />
+          <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+            <Badge variant={collection.id === "ppid" ? "success" : "secondary"}>
+              {accentLabel}
+            </Badge>
+            <Badge variant="outline" className="bg-white/55">
+              {activeAward.year}
+            </Badge>
+          </div>
+          <div className="absolute inset-x-4 bottom-4 rounded-lg border border-white/35 bg-white/20 p-4 text-white shadow-sm backdrop-blur-2xl">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/75">
+              Galeri otomatis
+            </p>
+            <h4 className="mt-1 text-lg font-bold leading-tight">
+              {activeAward.title}
+            </h4>
+            <p className="mt-1 text-sm leading-6 text-white/80">
+              {activeAward.description}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 rounded-lg border border-white/70 bg-white/30 p-3 shadow-sm backdrop-blur-2xl sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+              {accentLabel}
+            </p>
+            <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-slate-700">
+              {activeAward.description}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-full bg-white/35"
+              onClick={showPrevious}
+              aria-label={`Foto sebelumnya ${collection.title}`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1.5">
+              {collection.items.map((award, index) => (
+                <button
+                  key={`${collection.id}-dot-${award.id}`}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className={`h-2.5 rounded-full transition-all ${
+                    index === activeIndex
+                      ? "w-8 bg-emerald-700"
+                      : "w-2.5 bg-emerald-900/20 hover:bg-emerald-800/40"
+                  }`}
+                  aria-label={`Tampilkan foto ${index + 1} ${collection.title}`}
+                  aria-current={index === activeIndex}
+                />
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-full bg-white/35"
+              onClick={showNext}
+              aria-label={`Foto berikutnya ${collection.title}`}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }
 

@@ -1,6 +1,6 @@
-import type { DashboardData } from "@/lib/types";
+import type { DashboardData, DashboardRow } from "@/lib/types";
 
-const rows = [
+const rows: DashboardRow[] = [
   { id: 1, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Bandar Lampung", period: "Triwulan", year: 2026, value: 96.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
   { id: 2, indicator: "Madrasah terakreditasi A/B", category: "Pendidikan Madrasah", region: "Lampung Tengah", period: "Tahunan", year: 2026, value: 88.2, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 3, indicator: "KUA dengan layanan digital aktif", category: "Bimas Islam", region: "Lampung Selatan", period: "Semester", year: 2026, value: 91.5, unit: "persen", source: "Bidang Bimas Islam" },
@@ -20,7 +20,7 @@ const rows = [
 ];
 
 export async function getDashboardData(): Promise<DashboardData> {
-  return {
+  const dashboardData: DashboardData = {
     indicators: [
       {
         id: 1,
@@ -257,4 +257,6 @@ export async function getDashboardData(): Promise<DashboardData> {
       regions: ["Semua Wilayah", "Kanwil Lampung", "Bandar Lampung", "Metro", "Pringsewu", "Pesawaran", "Mesuji", "Tulang Bawang Barat", "Pesisir Barat", "Lampung Selatan", "Lampung Tengah"],
     },
   };
+
+  return dashboardData;
 }
