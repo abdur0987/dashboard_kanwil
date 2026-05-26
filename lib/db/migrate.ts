@@ -1,13 +1,15 @@
-import { sqlite } from "@/lib/db/client";
+import { executeSql } from "@/lib/db/client";
 
 let migrated = false;
+let migrationPromise: Promise<void> | null = null;
 
-export function ensureDatabaseReady() {
+export async function ensureDatabaseReady() {
   if (migrated) {
     return;
   }
 
-  sqlite.exec(`
+  if (!migrationPromise) {
+    migrationPromise = executeSql(`
     PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS user (
@@ -177,7 +179,10 @@ export function ensureDatabaseReady() {
     );
 
     CREATE INDEX IF NOT EXISTS dashboard_filters_kind_idx ON dashboard_filters(kind);
-  `);
+  `).then(() => {
+      migrated = true;
+    });
+  }
 
-  migrated = true;
+  await migrationPromise;
 }

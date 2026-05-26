@@ -393,11 +393,11 @@ export async function replaceDashboardData(data: DashboardData) {
 }
 
 async function ensureDashboardSeeded() {
-  ensureDatabaseReady();
+  await ensureDatabaseReady();
 
   if (!seedPromise) {
     seedPromise = (async () => {
-      const existing = await db.select({ id: indicatorsTable.id }).from(indicatorsTable).limit(1);
+      const existing = await db.select().from(indicatorsTable).limit(1);
 
       if (!existing.length) {
         await insertDashboardData(seedDashboardData);

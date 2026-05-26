@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { ensureDatabaseReady } from "@/lib/db/migrate";
 import { getDashboardData, replaceDashboardData } from "@/lib/services/dashboard";
 import type { DashboardData } from "@/lib/types";
 
@@ -15,6 +16,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  await ensureDatabaseReady();
+
   const session = await auth.api.getSession({
     headers: await headers(),
   });
