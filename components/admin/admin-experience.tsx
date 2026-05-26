@@ -1,15 +1,20 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowLeft,
   Database,
   FileJson,
   LayoutDashboard,
+  LogIn,
+  LogOut,
   MapPin,
   Plus,
+  RefreshCw,
   Save,
+  Settings,
   Trash2,
+  UserPlus,
   Video,
 } from "lucide-react";
 import Link from "next/link";
@@ -24,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { authClient } from "@/lib/auth-client";
 import type {
   ActivitySlide,
   ContactInfo,
@@ -39,7 +45,13 @@ type AdminExperienceProps = {
   data: DashboardData;
 };
 
-type AdminTab = "overview" | "indicators" | "datasets" | "content" | "contact";
+type AdminTab =
+  | "overview"
+  | "indicators"
+  | "datasets"
+  | "content"
+  | "contact"
+  | "account";
 
 const tabs: { id: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Ringkasan", icon: LayoutDashboard },
@@ -47,6 +59,7 @@ const tabs: { id: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "datasets", label: "Data Tabel", icon: FileJson },
   { id: "content", label: "Konten", icon: Video },
   { id: "contact", label: "Kontak", icon: MapPin },
+  { id: "account", label: "Akun Admin", icon: Settings },
 ];
 
 export function AdminExperience({ data }: AdminExperienceProps) {
@@ -57,6 +70,31 @@ export function AdminExperience({ data }: AdminExperienceProps) {
   const [activities, setActivities] = useState<ActivitySlide[]>(data.activities);
   const [videos, setVideos] = useState<VideoItem[]>(data.videos);
   const [contact, setContact] = useState<ContactInfo>(data.contact);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authName, setAuthName] = useState("Admin Kanwil");
+  const [authEmail, setAuthEmail] = useState("admin@lampung.kemenag.go.id");
+  const [authPassword, setAuthPassword] = useState("dashboard-kanwil");
+  const [authMessage, setAuthMessage] = useState("");
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountMessage, setAccountMessage] = useState("");
+  const [isAccountSaving, setIsAccountSaving] = useState(false);
+  const session = authClient.useSession();
+
+  useEffect(() => {
+    if (!session.data?.user) {
+      return;
+    }
+
+    setAccountName(session.data.user.name);
+    setAccountEmail(session.data.user.email);
+  }, [session.data?.user]);
 
   const snapshot = useMemo(
     () => ({
@@ -111,6 +149,135 @@ export function AdminExperience({ data }: AdminExperienceProps) {
     link.download = "dashboard-admin-draft.json";
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthMessage("");
+    setIsAuthSubmitting(true);
+
+    try {
+      const result =
+        authMode === "signin"
+          ? await authClient.signIn.email({
+              email: authEmail,
+              password: authPassword,
+            })
+          : await authClient.signUp.email({
+              name: authName,
+              email: authEmail,
+              password: authPassword,
+            });
+
+      if (result.error) {
+        setAuthMessage(result.error.message ?? "Autentikasi gagal.");
+        return;
+      }
+
+      await session.refetch();
+      setAuthMessage("Berhasil masuk ke panel admin.");
+    } catch {
+      setAuthMessage("Autentikasi gagal. Periksa email dan password.");
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function saveToApi() {
+    setSaveMessage("");
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/dashboard", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(snapshot),
+      });
+
+      if (!response.ok) {
+        throw new Error("save_failed");
+      }
+
+      setSaveMessage("Perubahan tersimpan ke SQLite melalui API dashboard.");
+    } catch {
+      setSaveMessage("Gagal menyimpan. Pastikan sesi admin masih aktif.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    await session.refetch();
+  }
+
+  async function saveAccountProfile() {
+    if (!session.data?.user) {
+      return;
+    }
+
+    setAccountMessage("");
+    setIsAccountSaving(true);
+
+    try {
+      if (accountName.trim() && accountName.trim() !== session.data.user.name) {
+        await postAuthAction("/api/auth/update-user", {
+          name: accountName.trim(),
+        });
+      }
+
+      if (
+        accountEmail.trim() &&
+        accountEmail.trim().toLowerCase() !== session.data.user.email.toLowerCase()
+      ) {
+        await postAuthAction("/api/auth/change-email", {
+          newEmail: accountEmail.trim().toLowerCase(),
+        });
+      }
+
+      await session.refetch();
+      setAccountMessage("Profil admin berhasil diperbarui.");
+    } catch (error) {
+      setAccountMessage(getErrorMessage(error, "Gagal memperbarui profil admin."));
+    } finally {
+      setIsAccountSaving(false);
+    }
+  }
+
+  async function saveAccountPassword() {
+    setAccountMessage("");
+
+    if (!currentPassword || !newPassword) {
+      setAccountMessage("Password lama dan password baru wajib diisi.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setAccountMessage("Konfirmasi password baru belum sama.");
+      return;
+    }
+
+    setIsAccountSaving(true);
+
+    try {
+      await postAuthAction("/api/auth/change-password", {
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: false,
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      await session.refetch();
+      setAccountMessage("Password admin berhasil diperbarui.");
+    } catch (error) {
+      setAccountMessage(getErrorMessage(error, "Gagal memperbarui password admin."));
+    } finally {
+      setIsAccountSaving(false);
+    }
   }
 
   function addIndicator() {
@@ -179,6 +346,35 @@ export function AdminExperience({ data }: AdminExperienceProps) {
     ]);
   }
 
+  if (session.isPending) {
+    return (
+      <main className="grid min-h-screen place-items-center text-slate-950">
+        <div className="glass-panel-strong rounded-lg p-6 text-center">
+          <RefreshCw className="mx-auto h-6 w-6 animate-spin text-primary" />
+          <p className="mt-3 text-sm font-semibold">Memeriksa sesi admin...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session.data) {
+    return (
+      <AuthScreen
+        mode={authMode}
+        name={authName}
+        email={authEmail}
+        password={authPassword}
+        message={authMessage}
+        isSubmitting={isAuthSubmitting}
+        onModeChange={setAuthMode}
+        onNameChange={setAuthName}
+        onEmailChange={setAuthEmail}
+        onPasswordChange={setAuthPassword}
+        onSubmit={handleAuthSubmit}
+      />
+    );
+  }
+
   return (
     <main className="min-h-screen text-slate-950">
       <header className="border-b border-white/60 bg-white/65 shadow-sm backdrop-blur-2xl">
@@ -206,11 +402,28 @@ export function AdminExperience({ data }: AdminExperienceProps) {
               <Save className="h-4 w-4" />
               Ekspor Draft
             </Button>
+            <Button onClick={saveToApi} disabled={isSaving}>
+              {isSaving ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4" />
+              )}
+              Simpan ke API
+            </Button>
+            <Button onClick={handleSignOut} variant="outline">
+              <LogOut className="h-4 w-4" />
+              Keluar
+            </Button>
           </div>
         </div>
       </header>
 
       <div className="section-shell">
+        {saveMessage ? (
+          <div className="mb-4 rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm font-medium text-emerald-900 shadow-sm backdrop-blur-xl">
+            {saveMessage}
+          </div>
+        ) : null}
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           <aside className="glass-panel-strong h-fit rounded-lg p-3">
             <nav className="grid gap-2">
@@ -234,8 +447,8 @@ export function AdminExperience({ data }: AdminExperienceProps) {
               })}
             </nav>
             <div className="mt-4 rounded-md border border-amber-200/80 bg-amber-50/75 p-3 text-xs leading-5 text-amber-900">
-              Perubahan masih berupa state lokal browser. Tombol ekspor menyediakan
-              JSON draft untuk integrasi backend berikutnya.
+              Perubahan diedit di browser, lalu disimpan permanen melalui API dashboard
+              ke SQLite. Ekspor JSON tetap tersedia untuk backup draft.
             </div>
           </aside>
 
@@ -326,9 +539,157 @@ export function AdminExperience({ data }: AdminExperienceProps) {
                 onUpdate={(patch) => setContact((current) => ({ ...current, ...patch }))}
               />
             ) : null}
+
+            {activeTab === "account" ? (
+              <AccountPanel
+                name={accountName}
+                email={accountEmail}
+                currentPassword={currentPassword}
+                newPassword={newPassword}
+                confirmPassword={confirmPassword}
+                message={accountMessage}
+                isSaving={isAccountSaving}
+                onNameChange={setAccountName}
+                onEmailChange={setAccountEmail}
+                onCurrentPasswordChange={setCurrentPassword}
+                onNewPasswordChange={setNewPassword}
+                onConfirmPasswordChange={setConfirmPassword}
+                onSaveProfile={saveAccountProfile}
+                onSavePassword={saveAccountPassword}
+              />
+            ) : null}
           </section>
         </div>
       </div>
+    </main>
+  );
+}
+
+function AuthScreen({
+  mode,
+  name,
+  email,
+  password,
+  message,
+  isSubmitting,
+  onModeChange,
+  onNameChange,
+  onEmailChange,
+  onPasswordChange,
+  onSubmit,
+}: {
+  mode: "signin" | "signup";
+  name: string;
+  email: string;
+  password: string;
+  message: string;
+  isSubmitting: boolean;
+  onModeChange: (mode: "signin" | "signup") => void;
+  onNameChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <main className="grid min-h-screen place-items-center px-4 text-slate-950">
+      <section className="glass-panel-strong w-full max-w-md rounded-lg p-6 shadow-2xl">
+        <Badge variant="outline" className="mb-4 w-fit">
+          Admin Backend
+        </Badge>
+        <h1 className="text-2xl font-bold">Masuk Panel Dashboard</h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Gunakan akun Better Auth untuk menyimpan perubahan dashboard ke API dan
+          database SQLite.
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg border border-white/70 bg-white/45 p-1 shadow-inner backdrop-blur-xl">
+          <button
+            type="button"
+            onClick={() => onModeChange("signin")}
+            className={`h-10 rounded-md text-sm font-semibold transition ${
+              mode === "signin"
+                ? "bg-primary text-white shadow-sm"
+                : "text-slate-700 hover:bg-white/70"
+            }`}
+          >
+            Masuk
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange("signup")}
+            className={`h-10 rounded-md text-sm font-semibold transition ${
+              mode === "signup"
+                ? "bg-primary text-white shadow-sm"
+                : "text-slate-700 hover:bg-white/70"
+            }`}
+          >
+            Buat Akun
+          </button>
+        </div>
+
+        <form className="mt-5 grid gap-4" onSubmit={onSubmit}>
+          {mode === "signup" ? (
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              <span>Nama</span>
+              <input
+                value={name}
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                  onNameChange(event.target.value)
+                }
+                className="h-11 rounded-md border border-white/70 bg-white/65 px-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-xl transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          ) : null}
+
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            <span>Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                onEmailChange(event.target.value)
+              }
+              className="h-11 rounded-md border border-white/70 bg-white/65 px-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-xl transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            <span>Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                onPasswordChange(event.target.value)
+              }
+              className="h-11 rounded-md border border-white/70 bg-white/65 px-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-xl transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+
+          {message ? (
+            <p className="rounded-md border border-amber-200/80 bg-amber-50/85 px-3 py-2 text-xs font-medium text-amber-900">
+              {message}
+            </p>
+          ) : null}
+
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : mode === "signin" ? (
+              <LogIn className="h-4 w-4" />
+            ) : (
+              <UserPlus className="h-4 w-4" />
+            )}
+            {mode === "signin" ? "Masuk" : "Buat Akun"}
+          </Button>
+        </form>
+
+        <Button asChild variant="outline" className="mt-3 w-full">
+          <Link href="/">
+            <ArrowLeft className="h-4 w-4" />
+            Kembali ke Dashboard Publik
+          </Link>
+        </Button>
+      </section>
     </main>
   );
 }
@@ -770,6 +1131,115 @@ function ContactPanel({
   );
 }
 
+function AccountPanel({
+  name,
+  email,
+  currentPassword,
+  newPassword,
+  confirmPassword,
+  message,
+  isSaving,
+  onNameChange,
+  onEmailChange,
+  onCurrentPasswordChange,
+  onNewPasswordChange,
+  onConfirmPasswordChange,
+  onSaveProfile,
+  onSavePassword,
+}: {
+  name: string;
+  email: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  message: string;
+  isSaving: boolean;
+  onNameChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+  onCurrentPasswordChange: (value: string) => void;
+  onNewPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+  onSaveProfile: () => void;
+  onSavePassword: () => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      {message ? (
+        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm font-medium text-emerald-900 shadow-sm backdrop-blur-xl">
+          {message}
+        </div>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Profil Admin</CardTitle>
+          <CardDescription>
+            Ubah nama dan email akun yang digunakan untuk masuk ke panel admin.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <InputField label="Nama admin" value={name} onChange={onNameChange} />
+          <InputField
+            label="Email login"
+            type="email"
+            value={email}
+            onChange={onEmailChange}
+          />
+          <div className="md:col-span-2">
+            <Button onClick={onSaveProfile} disabled={isSaving}>
+              {isSaving ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Simpan Profil
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Password Admin</CardTitle>
+          <CardDescription>
+            Password baru akan disimpan oleh Better Auth sebagai hash di tabel account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <InputField
+            label="Password lama"
+            type="password"
+            value={currentPassword}
+            onChange={onCurrentPasswordChange}
+          />
+          <InputField
+            label="Password baru"
+            type="password"
+            value={newPassword}
+            onChange={onNewPasswordChange}
+          />
+          <InputField
+            label="Konfirmasi password"
+            type="password"
+            value={confirmPassword}
+            onChange={onConfirmPasswordChange}
+          />
+          <div className="md:col-span-3">
+            <Button onClick={onSavePassword} disabled={isSaving}>
+              {isSaving ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Simpan Password
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function AdminMetric({
   label,
   value,
@@ -809,7 +1279,7 @@ function InputField({
   label: string;
   value: string | number;
   onChange: (value: string) => void;
-  type?: "text" | "number";
+  type?: "email" | "number" | "password" | "text";
   className?: string;
 }) {
   return (
@@ -860,6 +1330,34 @@ const contactLabels: Record<keyof ContactInfo, string> = {
   website: "Website",
   mapEmbedUrl: "URL embed peta",
 };
+
+async function postAuthAction(path: string, body: Record<string, unknown>) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { message?: string; error?: string }
+      | null;
+
+    throw new Error(payload?.message ?? payload?.error ?? "auth_request_failed");
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message !== "auth_request_failed") {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 function nextNumericId(items: { id: number }[]) {
   return items.length ? Math.max(...items.map((item) => item.id)) + 1 : 1;

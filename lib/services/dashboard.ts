@@ -1,4 +1,21 @@
-import type { DashboardData, DashboardRow } from "@/lib/types";
+import { asc } from "drizzle-orm";
+
+import { db } from "@/lib/db/client";
+import { ensureDatabaseReady } from "@/lib/db/migrate";
+import {
+  activities as activitiesTable,
+  awardCollections as awardCollectionsTable,
+  awardItems as awardItemsTable,
+  chartSeries as chartSeriesTable,
+  contactInfo as contactInfoTable,
+  dashboardRows as dashboardRowsTable,
+  executiveSchedules as executiveSchedulesTable,
+  filters as filtersTable,
+  indicators as indicatorsTable,
+  publications as publicationsTable,
+  videos as videosTable,
+} from "@/lib/db/schema";
+import type { ChartPoint, DashboardData, DashboardRow } from "@/lib/types";
 
 const rows: DashboardRow[] = [
   { id: 1, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Bandar Lampung", period: "Triwulan", year: 2026, value: 96.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
@@ -19,8 +36,7 @@ const rows: DashboardRow[] = [
   { id: 16, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2023, value: 80.1, unit: "persen", source: "Bidang Ortala" },
 ];
 
-export async function getDashboardData(): Promise<DashboardData> {
-  const dashboardData: DashboardData = {
+export const seedDashboardData: DashboardData = {
     indicators: [
       {
         id: 1,
@@ -256,7 +272,272 @@ export async function getDashboardData(): Promise<DashboardData> {
       categories: ["Semua Kategori", "Pendidikan Madrasah", "Bimas Islam", "SPAK", "Layanan Publik"],
       regions: ["Semua Wilayah", "Kanwil Lampung", "Bandar Lampung", "Metro", "Pringsewu", "Pesawaran", "Mesuji", "Tulang Bawang Barat", "Pesisir Barat", "Lampung Selatan", "Lampung Tengah"],
     },
+};
+
+const chartCategories: (keyof Omit<ChartPoint, "year">)[] = [
+  "Pendidikan Madrasah",
+  "Bimas Islam",
+  "SPAK",
+  "Layanan Publik",
+];
+
+let seedPromise: Promise<void> | null = null;
+
+export async function getDashboardData(): Promise<DashboardData> {
+  await ensureDashboardSeeded();
+  const [
+    indicators,
+    rows,
+    rawChartSeries,
+    executiveSchedules,
+    rawAwardCollections,
+    rawAwardItems,
+    publications,
+    activities,
+    videos,
+    contactRows,
+    filterRows,
+  ] = await Promise.all([
+    db.select().from(indicatorsTable).orderBy(asc(indicatorsTable.id)),
+    db.select().from(dashboardRowsTable).orderBy(asc(dashboardRowsTable.id)),
+    db
+      .select()
+      .from(chartSeriesTable)
+      .orderBy(asc(chartSeriesTable.year), asc(chartSeriesTable.category)),
+    db
+      .select()
+      .from(executiveSchedulesTable)
+      .orderBy(asc(executiveSchedulesTable.id)),
+    db
+      .select()
+      .from(awardCollectionsTable)
+      .orderBy(asc(awardCollectionsTable.sortOrder)),
+    db
+      .select()
+      .from(awardItemsTable)
+      .orderBy(asc(awardItemsTable.collectionId), asc(awardItemsTable.sortOrder)),
+    db.select().from(publicationsTable).orderBy(asc(publicationsTable.id)),
+    db.select().from(activitiesTable).orderBy(asc(activitiesTable.id)),
+    db.select().from(videosTable).orderBy(asc(videosTable.id)),
+    db.select().from(contactInfoTable).limit(1),
+    db.select().from(filtersTable).orderBy(asc(filtersTable.sortOrder)),
+  ]);
+
+  const chartSeries = toChartPoints(rawChartSeries);
+  const awardCollections = rawAwardCollections.map((collection) => ({
+    id: collection.id,
+    title: collection.title,
+    description: collection.description,
+    items: rawAwardItems
+      .filter((item) => item.collectionId === collection.id)
+      .map((item) => ({
+        id: item.itemId,
+        title: item.title,
+        description: item.description,
+        year: item.year,
+        imageUrl: item.imageUrl,
+        alt: item.alt,
+      })),
+  }));
+
+  const filters = {
+    years: filterRows
+      .filter((filter) => filter.kind === "year")
+      .map((filter) => filter.value),
+    categories: filterRows
+      .filter((filter) => filter.kind === "category")
+      .map((filter) => filter.value),
+    regions: filterRows
+      .filter((filter) => filter.kind === "region")
+      .map((filter) => filter.value),
   };
 
-  return dashboardData;
+  const contact = contactRows[0]
+    ? {
+        institution: contactRows[0].institution,
+        address: contactRows[0].address,
+        phone: contactRows[0].phone,
+        whatsapp: contactRows[0].whatsapp,
+        email: contactRows[0].email,
+        instagram: contactRows[0].instagram,
+        youtube: contactRows[0].youtube,
+        website: contactRows[0].website,
+        mapEmbedUrl: contactRows[0].mapEmbedUrl,
+      }
+    : seedDashboardData.contact;
+
+  return {
+    indicators,
+    rows,
+    chartSeries,
+    executiveSchedules,
+    awardCollections,
+    publications,
+    activities,
+    videos,
+    contact,
+    filters: {
+      years: filters.years.length ? filters.years : seedDashboardData.filters.years,
+      categories: filters.categories.length
+        ? filters.categories
+        : seedDashboardData.filters.categories,
+      regions: filters.regions.length ? filters.regions : seedDashboardData.filters.regions,
+    },
+  };
+}
+
+export async function replaceDashboardData(data: DashboardData) {
+  await ensureDatabaseReady();
+  await clearDashboardTables();
+  await insertDashboardData(data);
+}
+
+async function ensureDashboardSeeded() {
+  ensureDatabaseReady();
+
+  if (!seedPromise) {
+    seedPromise = (async () => {
+      const existing = await db.select({ id: indicatorsTable.id }).from(indicatorsTable).limit(1);
+
+      if (!existing.length) {
+        await insertDashboardData(seedDashboardData);
+      }
+    })();
+  }
+
+  return seedPromise;
+}
+
+async function clearDashboardTables() {
+  await db.delete(awardItemsTable);
+  await db.delete(awardCollectionsTable);
+  await db.delete(filtersTable);
+  await db.delete(contactInfoTable);
+  await db.delete(videosTable);
+  await db.delete(activitiesTable);
+  await db.delete(publicationsTable);
+  await db.delete(executiveSchedulesTable);
+  await db.delete(chartSeriesTable);
+  await db.delete(dashboardRowsTable);
+  await db.delete(indicatorsTable);
+}
+
+async function insertDashboardData(data: DashboardData) {
+  if (data.indicators.length) {
+    await db.insert(indicatorsTable).values(data.indicators);
+  }
+
+  if (data.rows.length) {
+    await db.insert(dashboardRowsTable).values(data.rows);
+  }
+
+  const chartValues = data.chartSeries.flatMap((point) =>
+    chartCategories.map((category) => ({
+      year: point.year,
+      category,
+      value: point[category],
+    })),
+  );
+
+  if (chartValues.length) {
+    await db.insert(chartSeriesTable).values(chartValues);
+  }
+
+  if (data.executiveSchedules.length) {
+    await db.insert(executiveSchedulesTable).values(data.executiveSchedules);
+  }
+
+  if (data.awardCollections.length) {
+    await db.insert(awardCollectionsTable).values(
+      data.awardCollections.map((collection, index) => ({
+        id: collection.id,
+        title: collection.title,
+        description: collection.description,
+        sortOrder: index,
+      })),
+    );
+
+    const awardValues = data.awardCollections.flatMap((collection, collectionIndex) =>
+      collection.items.map((item, itemIndex) => ({
+        collectionId: collection.id,
+        itemId: item.id,
+        title: item.title,
+        description: item.description,
+        year: item.year,
+        imageUrl: item.imageUrl,
+        alt: item.alt,
+        sortOrder: collectionIndex * 100 + itemIndex,
+      })),
+    );
+
+    if (awardValues.length) {
+      await db.insert(awardItemsTable).values(awardValues);
+    }
+  }
+
+  if (data.publications.length) {
+    await db.insert(publicationsTable).values(data.publications);
+  }
+
+  if (data.activities.length) {
+    await db.insert(activitiesTable).values(data.activities);
+  }
+
+  if (data.videos.length) {
+    await db.insert(videosTable).values(data.videos);
+  }
+
+  await db.insert(contactInfoTable).values({ id: 1, ...data.contact });
+
+  const filterValues = [
+    ...data.filters.years.map((value, index) => ({
+      kind: "year" as const,
+      value,
+      sortOrder: index,
+    })),
+    ...data.filters.categories.map((value, index) => ({
+      kind: "category" as const,
+      value,
+      sortOrder: 100 + index,
+    })),
+    ...data.filters.regions.map((value, index) => ({
+      kind: "region" as const,
+      value,
+      sortOrder: 200 + index,
+    })),
+  ];
+
+  if (filterValues.length) {
+    await db.insert(filtersTable).values(filterValues);
+  }
+}
+
+function toChartPoints(
+  rawChartSeries: {
+    year: number;
+    category: string;
+    value: number;
+  }[],
+): ChartPoint[] {
+  const grouped = new Map<number, ChartPoint>();
+
+  for (const item of rawChartSeries) {
+    const point =
+      grouped.get(item.year) ??
+      ({
+        year: item.year,
+        "Pendidikan Madrasah": 0,
+        "Bimas Islam": 0,
+        SPAK: 0,
+        "Layanan Publik": 0,
+      } satisfies ChartPoint);
+
+    if (chartCategories.includes(item.category as keyof Omit<ChartPoint, "year">)) {
+      point[item.category as keyof Omit<ChartPoint, "year">] = item.value;
+    }
+
+    grouped.set(item.year, point);
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => a.year - b.year);
 }
