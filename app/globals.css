@@ -164,6 +164,41 @@
       0 12px 28px rgba(14, 116, 84, 0.16);
   }
 
+  .kanwil-brand-mark {
+    @apply relative isolate grid shrink-0 place-items-center overflow-hidden rounded-lg border border-white/70 bg-white/70 p-0.5 shadow-sm backdrop-blur-2xl;
+    background:
+      radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 30%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(236, 253, 245, 0.5) 54%, rgba(254, 243, 199, 0.55));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+      0 16px 34px rgba(13, 148, 136, 0.18);
+  }
+
+  .kanwil-brand-mark span {
+    position: absolute;
+    inset: auto -18% -22% 28%;
+    height: 58%;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    filter: blur(10px);
+    pointer-events: none;
+  }
+
+  .mobile-nav-link {
+    @apply rounded-lg border border-white/70 bg-white/45 px-3 py-2.5 text-sm font-semibold text-slate-800 shadow-sm backdrop-blur-2xl transition;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(236, 253, 245, 0.46)),
+      linear-gradient(90deg, rgba(16, 185, 129, 0.08), rgba(245, 158, 11, 0.08));
+  }
+
+  .mobile-nav-link:hover {
+    @apply border-emerald-200/80 bg-white/70 text-emerald-900;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.72),
+      0 14px 32px rgba(13, 148, 136, 0.12);
+  }
+
   .liquid-chart-card {
     background:
       radial-gradient(120% 90% at 16% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 54%),
@@ -299,6 +334,305 @@
 
   @media (prefers-reduced-motion: reduce) {
     .liquid-award-carousel::before {
+      animation: none;
+    }
+  }
+
+  .executive-monitor-backdrop {
+    @apply fixed inset-0 z-50 grid bg-slate-950/70 p-3 text-white backdrop-blur-2xl md:p-5;
+    background:
+      radial-gradient(120% 90% at 12% 4%, rgba(20, 184, 166, 0.26), rgba(20, 184, 166, 0) 54%),
+      radial-gradient(80% 64% at 82% 6%, rgba(251, 191, 36, 0.26), rgba(251, 191, 36, 0) 62%),
+      radial-gradient(80% 72% at 88% 88%, rgba(59, 130, 246, 0.24), rgba(59, 130, 246, 0) 60%),
+      radial-gradient(64% 54% at 14% 88%, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0) 60%),
+      linear-gradient(135deg, rgba(3, 37, 33, 0.9), rgba(9, 21, 39, 0.84));
+  }
+
+  .executive-monitor-shell {
+    @apply relative isolate flex min-h-0 flex-col overflow-hidden rounded-lg border border-white/20 shadow-glass backdrop-blur-2xl;
+    background:
+      radial-gradient(110% 85% at 8% 0%, rgba(110, 231, 183, 0.18), rgba(110, 231, 183, 0) 56%),
+      radial-gradient(80% 72% at 90% 4%, rgba(251, 191, 36, 0.14), rgba(251, 191, 36, 0) 58%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07) 44%, rgba(255, 255, 255, 0.13)),
+      linear-gradient(180deg, rgba(4, 58, 45, 0.78), rgba(3, 31, 27, 0.88));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.36),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+      0 34px 110px rgba(0, 0, 0, 0.42);
+  }
+
+  .executive-monitor-shell::before {
+    content: "";
+    position: absolute;
+    inset: -24% -18% auto -18%;
+    z-index: -1;
+    height: 50%;
+    border-radius: 999px;
+    background:
+      linear-gradient(110deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.02)),
+      radial-gradient(circle at 28% 50%, rgba(110, 231, 183, 0.32), rgba(110, 231, 183, 0) 60%);
+    filter: blur(24px);
+    animation: executive-liquid-drift 12s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  .executive-monitor-tab {
+    @apply shrink-0 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/60 shadow-sm backdrop-blur-2xl transition;
+  }
+
+  .executive-monitor-tab:hover,
+  .executive-monitor-tab-active {
+    @apply border-white/35 bg-white/25 text-white;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      0 12px 32px rgba(16, 185, 129, 0.12);
+  }
+
+  .executive-monitor-slide {
+    @apply min-h-0 overflow-hidden;
+    animation: executive-slide-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .executive-monitor-card {
+    @apply relative isolate overflow-hidden rounded-lg border border-white/20 bg-white/10 shadow-glass backdrop-blur-2xl;
+    background:
+      radial-gradient(100% 80% at 12% 0%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 58%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06) 52%, rgba(255, 255, 255, 0.12));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.34),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      0 24px 80px rgba(0, 0, 0, 0.18);
+  }
+
+  .executive-hero-card {
+    background:
+      radial-gradient(54% 46% at 86% 18%, rgba(250, 204, 21, 0.22), rgba(250, 204, 21, 0) 60%),
+      radial-gradient(62% 50% at 22% 24%, rgba(45, 212, 191, 0.26), rgba(45, 212, 191, 0) 62%),
+      radial-gradient(42% 44% at 28% 86%, rgba(96, 165, 250, 0.16), rgba(96, 165, 250, 0) 62%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.07) 52%, rgba(255, 255, 255, 0.14));
+  }
+
+  .executive-hero-card::after,
+  .executive-agenda-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -12% -32% 36%;
+    height: 52%;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.16);
+    filter: blur(34px);
+    pointer-events: none;
+  }
+
+  .executive-logo-showcase {
+    @apply hidden rounded-lg border border-white/20 bg-white/10 p-5 shadow-sm backdrop-blur-2xl xl:grid xl:gap-4;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07)),
+      radial-gradient(80% 70% at 80% 20%, rgba(251, 191, 36, 0.18), rgba(251, 191, 36, 0));
+  }
+
+  .monitor-stat {
+    @apply rounded-lg border border-white/20 p-4 shadow-sm backdrop-blur-2xl;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.25),
+      0 14px 38px rgba(0, 0, 0, 0.12);
+  }
+
+  .monitor-stat-emerald {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.28), rgba(255, 255, 255, 0.08));
+  }
+
+  .monitor-stat-cyan {
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.24), rgba(255, 255, 255, 0.08));
+  }
+
+  .monitor-stat-amber {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.28), rgba(255, 255, 255, 0.08));
+  }
+
+  .monitor-stat-violet {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.23), rgba(255, 255, 255, 0.08));
+  }
+
+  .summary-data-card {
+    @apply flex min-w-0 items-center gap-3 rounded-lg border border-white/20 p-3 shadow-sm backdrop-blur-2xl;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.25),
+      0 14px 36px rgba(0, 0, 0, 0.12);
+  }
+
+  .summary-data-icon,
+  .summary-service-icon {
+    @apply grid shrink-0 place-items-center rounded-md border border-white/25 bg-white/15 text-white shadow-sm backdrop-blur-2xl;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 10px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .summary-data-icon {
+    @apply h-10 w-10;
+  }
+
+  .summary-service-icon {
+    @apply h-11 w-11;
+  }
+
+  .summary-trend-card {
+    @apply rounded-lg border border-white/20 bg-white/10 p-4 shadow-sm backdrop-blur-2xl;
+    background:
+      radial-gradient(80% 80% at 12% 0%, rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0) 62%),
+      radial-gradient(90% 80% at 96% 24%, rgba(251, 191, 36, 0.14), rgba(251, 191, 36, 0) 62%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+  }
+
+  .summary-trend-track {
+    @apply relative h-full overflow-hidden rounded-md border border-white/15 bg-white/10 backdrop-blur-2xl;
+  }
+
+  .summary-trend-track::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
+      repeating-linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.11) 0 1px,
+        transparent 1px 24%
+      );
+    pointer-events: none;
+  }
+
+  .summary-trend-bar {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    border-radius: 0.5rem 0.5rem 0.375rem 0.375rem;
+    transform-origin: bottom;
+    animation: summary-bar-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .executive-monitor-card::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(var(--radius) - 1px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+  }
+
+  .executive-monitor-tile {
+    @apply grid gap-4 rounded-lg border border-white/20 bg-white/10 p-4 shadow-sm backdrop-blur-2xl sm:grid-cols-[1fr_auto] sm:items-center;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 14px 38px rgba(0, 0, 0, 0.12);
+  }
+
+  .executive-indicator-tile {
+    min-height: 148px;
+  }
+
+  .tile-tone-0 {
+    background:
+      linear-gradient(135deg, rgba(37, 99, 235, 0.24), rgba(255, 255, 255, 0.08)),
+      radial-gradient(70% 80% at 96% 0%, rgba(147, 197, 253, 0.25), rgba(147, 197, 253, 0));
+  }
+
+  .tile-tone-1 {
+    background:
+      linear-gradient(135deg, rgba(13, 148, 136, 0.26), rgba(255, 255, 255, 0.08)),
+      radial-gradient(70% 80% at 96% 0%, rgba(94, 234, 212, 0.25), rgba(94, 234, 212, 0));
+  }
+
+  .tile-tone-2 {
+    background:
+      linear-gradient(135deg, rgba(34, 197, 94, 0.24), rgba(255, 255, 255, 0.08)),
+      radial-gradient(70% 80% at 96% 0%, rgba(134, 239, 172, 0.24), rgba(134, 239, 172, 0));
+  }
+
+  .tile-tone-3 {
+    background:
+      linear-gradient(135deg, rgba(245, 158, 11, 0.26), rgba(255, 255, 255, 0.08)),
+      radial-gradient(70% 80% at 96% 0%, rgba(253, 230, 138, 0.24), rgba(253, 230, 138, 0));
+  }
+
+  .executive-agenda-card {
+    background:
+      radial-gradient(56% 44% at 18% 18%, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0) 64%),
+      radial-gradient(58% 52% at 90% 12%, rgba(45, 212, 191, 0.2), rgba(45, 212, 191, 0) 64%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07) 52%, rgba(255, 255, 255, 0.12));
+  }
+
+  .executive-monitor-progress {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(167, 243, 208, 0.9), rgba(250, 204, 21, 0.88)),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.56),
+      0 0 28px rgba(110, 231, 183, 0.4);
+  }
+
+  .executive-monitor-progress.running {
+    animation-name: executive-progress;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes executive-slide-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 16px, 0) scale(0.985);
+      filter: blur(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes executive-progress {
+    from {
+      width: 0%;
+    }
+
+    to {
+      width: 100%;
+    }
+  }
+
+  @keyframes summary-bar-rise {
+    from {
+      transform: scaleY(0.08);
+      opacity: 0.36;
+      filter: blur(5px);
+    }
+
+    to {
+      transform: scaleY(1);
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+
+  @keyframes executive-liquid-drift {
+    from {
+      transform: translate3d(-2%, -2%, 0) rotate(-3deg) scale(1);
+    }
+
+    to {
+      transform: translate3d(3%, 9%, 0) rotate(3deg) scale(1.06);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .executive-monitor-shell::before,
+    .executive-monitor-slide,
+    .executive-monitor-progress.running {
       animation: none;
     }
   }

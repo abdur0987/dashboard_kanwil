@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -31,15 +31,23 @@ import {
   Download,
   FileText,
   Globe2,
+  GraduationCap,
+  Handshake,
   Landmark,
   Mail,
   MapPinned,
   MapPin,
   Menu,
+  Pause,
   Phone,
   PlayCircle,
+  Presentation,
+  RefreshCw,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
+  Video,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -86,15 +94,54 @@ const navItems = [
   { label: "Video", href: "#video" },
   { label: "Kontak", href: "#kontak" },
   { label: "Lokasi", href: "#lokasi" },
+  { label: "SlideShow", href: "/slideshow" },
   { label: "Admin", href: "/admin" },
 ];
 
-export function DashboardExperience({ data }: DashboardExperienceProps) {
+export function DashboardExperience({ data: initialData }: DashboardExperienceProps) {
+  const [data, setData] = useState(initialData);
   const [year, setYear] = useState("Semua Tahun");
   const [category, setCategory] = useState("Semua Kategori");
   const [region, setRegion] = useState("Semua Wilayah");
   const [currentSlide, setCurrentSlide] = useState(0);
   const dashboardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function refreshDashboardData() {
+      try {
+        const response = await fetch(`/api/dashboard?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) return;
+
+        const nextData = (await response.json()) as DashboardData;
+
+        if (mounted) {
+          setData(nextData);
+        }
+      } catch {
+        // The public dashboard keeps the latest visible data if a refresh fails.
+      }
+    }
+
+    void refreshDashboardData();
+
+    const timer = window.setInterval(refreshDashboardData, 20000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (data.activities.length && currentSlide >= data.activities.length) {
+      setCurrentSlide(0);
+    }
+  }, [currentSlide, data.activities.length]);
 
   const filteredRows = useMemo(() => {
     return data.rows.filter((row) => {
@@ -402,6 +449,12 @@ export function DashboardExperience({ data }: DashboardExperienceProps) {
               description="Gunakan filter untuk melihat perkembangan berdasarkan tahun, bidang layanan, dan kabupaten/kota."
             />
             <div className="flex flex-wrap gap-2">
+              <Button asChild variant="secondary" className="glass-button-shine">
+                <Link href="/slideshow">
+                  <Presentation className="h-4 w-4" />
+                  SlideShow
+                </Link>
+              </Button>
               <Button variant="outline" onClick={downloadCsv}>
                 <ArrowDownToLine className="h-4 w-4" />
                 CSV
@@ -849,6 +902,37 @@ function TopBar({ contact }: { contact: DashboardData["contact"] }) {
   );
 }
 
+function BrandMark({ compact = false }: { compact?: boolean }) {
+  const size = compact ? 40 : 64;
+
+  return (
+    <div
+      className={`kanwil-brand-mark ${compact ? "h-10 w-10" : "h-16 w-16"}`}
+      aria-hidden
+    >
+      <Image
+        src="/brand/logo-kanwil-kemenag-lampung-icon.png"
+        alt=""
+        width={size}
+        height={size}
+        className="h-full w-full object-contain"
+      />
+      <span />
+    </div>
+  );
+}
+
+function serviceIcon(category: string): ElementType {
+  const icons: Record<string, ElementType> = {
+    "Layanan Publik": Handshake,
+    "Pendidikan Madrasah": GraduationCap,
+    "Bimas Islam": Landmark,
+    SPAK: ShieldCheck,
+  };
+
+  return icons[category] ?? BarChart3;
+}
+
 function SiteHeader() {
   const [open, setOpen] = useState(false);
 
@@ -856,9 +940,7 @@ function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-white/50 bg-white/60 shadow-sm backdrop-blur-2xl">
       <div className="container flex min-h-16 items-center justify-between gap-4">
         <a href="#" className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md border border-white/50 bg-primary/90 text-white shadow-sm backdrop-blur-2xl">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
+          <BrandMark compact />
           <div>
             <p className="font-bold leading-tight text-slate-900">Dashboard Digital Kanwil</p>
             <p className="text-xs text-muted-foreground">Kemenag Provinsi Lampung</p>
@@ -886,13 +968,13 @@ function SiteHeader() {
         </Button>
       </div>
       {open ? (
-        <nav className="container grid gap-1 border-t border-white/50 bg-white/70 py-3 backdrop-blur-2xl md:hidden">
+        <nav className="container grid gap-2 border-t border-white/50 bg-white/70 py-3 backdrop-blur-2xl sm:grid-cols-2 md:hidden">
           {navItems.map((item) => (
             item.href.startsWith("#") ? (
               <a
                 key={item.href}
                 href={item.href}
-                className="rounded-md px-3 py-2 text-sm font-medium hover:bg-white/60"
+                className="mobile-nav-link"
                 onClick={() => setOpen(false)}
               >
                 {item.label}
@@ -901,7 +983,7 @@ function SiteHeader() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-md px-3 py-2 text-sm font-medium hover:bg-white/60"
+                className="mobile-nav-link"
                 onClick={() => setOpen(false)}
               >
                 {item.label}
@@ -1157,6 +1239,757 @@ function AwardCarousel({
   );
 }
 
+export function SlideShowExperience({
+  data: initialData,
+  onClose,
+}: {
+  data: DashboardData;
+  onClose?: () => void;
+}) {
+  const [data, setData] = useState(initialData);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const intervalMs = 9000;
+  const slides = [
+    "Ringkasan",
+    "Penghargaan",
+    "Agenda",
+    "Grafik",
+    "Komposisi",
+    "Publikasi",
+  ];
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+
+    window.location.href = "/";
+  }, [onClose]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function refreshDashboardData() {
+      try {
+        const response = await fetch(`/api/dashboard?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) return;
+
+        const nextData = (await response.json()) as DashboardData;
+
+        if (mounted) {
+          setData(nextData);
+          setLastUpdated(new Date());
+        }
+      } catch {
+        // Keep the latest visible dashboard data while the next poll retries.
+      }
+    }
+
+    void refreshDashboardData();
+
+    const timer = window.setInterval(refreshDashboardData, 20000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.add("overflow-hidden");
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        handleClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleClose]);
+
+  useEffect(() => {
+    if (!playing) return;
+
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % slides.length);
+    }, intervalMs);
+
+    return () => window.clearInterval(timer);
+  }, [playing, slides.length]);
+
+  const categoryTotals = useMemo(() => {
+    return data.rows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.category] = (acc[row.category] ?? 0) + row.value;
+      return acc;
+    }, {});
+  }, [data.rows]);
+
+  const kpi = useMemo(() => {
+    const values = data.rows.map((row) => row.value);
+    const average = values.length
+      ? values.reduce((total, value) => total + value, 0) / values.length
+      : 0;
+    const latestYear = data.rows.length
+      ? Math.max(...data.rows.map((row) => row.year))
+      : "-";
+    const sources = new Set(data.rows.map((row) => row.source)).size;
+
+    return {
+      count: data.rows.length,
+      average,
+      latestYear,
+      sources,
+    };
+  }, [data.rows]);
+
+  const chartSeries = data.chartSeries;
+  const visibleCategories = data.filters.categories.filter(
+    (item) => item !== "Semua Kategori",
+  );
+
+  const trendSnapshot = useMemo(() => {
+    const latestPoint = chartSeries[chartSeries.length - 1];
+
+    if (!latestPoint) {
+      return {
+        latestYear: "-",
+        average: 0,
+        strongestCategory: "-",
+        strongestValue: 0,
+      };
+    }
+
+    const values = visibleCategories.map((item) => ({
+      category: item,
+      value: Number((latestPoint as unknown as Record<string, number>)[item] ?? 0),
+    }));
+    const total = values.reduce((sum, item) => sum + item.value, 0);
+    const strongest = values.reduce(
+      (selected, item) => (item.value > selected.value ? item : selected),
+      values[0] ?? { category: "-", value: 0 },
+    );
+
+    return {
+      latestYear: latestPoint.year,
+      average: values.length ? total / values.length : 0,
+      strongestCategory: strongest.category,
+      strongestValue: strongest.value,
+    };
+  }, [chartSeries, visibleCategories]);
+
+  const monitorPieData = useMemo(() => {
+    return Object.entries(categoryTotals).map(([name, value]) => ({ name, value }));
+  }, [categoryTotals]);
+
+  const latestIndicators = data.indicators.slice(0, 4);
+  const featuredAwards = data.awardCollections.map((collection) => ({
+    ...collection,
+    award: collection.items[0],
+  }));
+  const awardPhotoCount = data.awardCollections.reduce(
+    (total, collection) => total + collection.items.length,
+    0,
+  );
+  const summaryStats = [
+    {
+      label: "Indikator",
+      value: data.indicators.length,
+      helper: "layanan strategis",
+      icon: BarChart3,
+      tone: "emerald" as const,
+    },
+    {
+      label: "Data",
+      value: data.rows.length,
+      helper: "baris dashboard",
+      icon: TrendingUp,
+      tone: "cyan" as const,
+    },
+    {
+      label: "Agenda",
+      value: data.executiveSchedules.length,
+      helper: "jadwal pimpinan",
+      icon: CalendarDays,
+      tone: "amber" as const,
+    },
+    {
+      label: "Penghargaan",
+      value: awardPhotoCount,
+      helper: "foto koleksi",
+      icon: Award,
+      tone: "violet" as const,
+    },
+    {
+      label: "Publikasi",
+      value: data.publications.length,
+      helper: "dokumen resmi",
+      icon: FileText,
+      tone: "emerald" as const,
+    },
+    {
+      label: "Video",
+      value: data.videos.length,
+      helper: "kanal informasi",
+      icon: Video,
+      tone: "cyan" as const,
+    },
+  ];
+  const trendBars = data.chartSeries.map((point) => {
+    const values = visibleCategories.map((item) =>
+      Number((point as unknown as Record<string, number>)[item] ?? 0),
+    );
+    const average = values.length
+      ? values.reduce((total, value) => total + value, 0) / values.length
+      : 0;
+
+    return {
+      year: point.year,
+      average,
+    };
+  });
+  const updatedLabel = lastUpdated
+    ? lastUpdated.toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "sinkron otomatis";
+
+  return (
+    <main className="executive-monitor-backdrop" role="main">
+      <div className="executive-monitor-shell">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/20 px-4 py-3 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandMark compact />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/75">
+                SlideShow Monitoring
+              </p>
+              <h2 className="truncate text-lg font-bold text-white md:text-xl">
+                Dashboard Digital Kanwil Kemenag Lampung
+              </h2>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 backdrop-blur-2xl md:inline-flex">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Update {updatedLabel}
+            </span>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-10 w-10 border-white/30 bg-white/15 text-white hover:bg-white/25"
+              onClick={() => setPlaying((value) => !value)}
+              aria-label={playing ? "Jeda slideshow" : "Jalankan slideshow"}
+            >
+              {playing ? <Pause className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-10 w-10 border-white/30 bg-white/15 text-white hover:bg-white/25"
+              onClick={handleClose}
+              aria-label="Tutup slideshow"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_1fr_auto] gap-4 p-4 md:p-6">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {slides.map((slide, index) => (
+              <button
+                key={slide}
+                type="button"
+                className={`executive-monitor-tab ${
+                  index === activeSlide ? "executive-monitor-tab-active" : ""
+                }`}
+                onClick={() => setActiveSlide(index)}
+              >
+                {slide}
+              </button>
+            ))}
+          </div>
+
+          <div key={activeSlide} className="executive-monitor-slide">
+            {activeSlide === 0 ? (
+              <div className="grid h-full gap-4 xl:grid-cols-[1.18fr_0.82fr]">
+                <div className="executive-monitor-card executive-hero-card flex min-h-0 flex-col p-5 md:p-7">
+                  <div className="relative z-10 grid gap-6 xl:grid-cols-[1fr_260px] xl:items-start">
+                    <div>
+                      <Badge className="mb-5 w-fit border-white/40 bg-white/20 text-white backdrop-blur-2xl">
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        Live SlideShow
+                      </Badge>
+                      <h3 className="max-w-3xl text-3xl font-bold leading-tight text-white md:text-5xl">
+                        Monitoring pimpinan yang bergerak otomatis, ringkas, dan real-time.
+                      </h3>
+                      <p className="mt-4 max-w-2xl text-base leading-7 text-white/80">
+                        Semua data ditarik dari API dashboard yang sama. Ketika admin
+                        memperbarui konten, halaman ini ikut menyegarkan data secara berkala.
+                      </p>
+                    </div>
+                    <div className="executive-logo-showcase">
+                      <BrandMark />
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+                          Kanwil Kemenag
+                        </p>
+                        <p className="mt-2 text-2xl font-bold leading-tight text-white">
+                          Provinsi Lampung
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative z-10 mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {summaryStats.map((stat) => (
+                      <SummaryDataCard key={stat.label} {...stat} />
+                    ))}
+                  </div>
+                  <div className="summary-trend-card relative z-10 mt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100/70">
+                          Tren rata-rata semua layanan
+                        </p>
+                        <p className="mt-1 text-sm text-white/70">
+                          Ringkasan nilai lintas kategori dari data dashboard.
+                        </p>
+                      </div>
+                      <div className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-sm font-bold text-white backdrop-blur-2xl">
+                        {formatNumber(kpi.average)}
+                      </div>
+                    </div>
+                    <div className="mt-4 grid h-32 grid-cols-4 items-end gap-3">
+                      {trendBars.map((point, index) => (
+                        <div key={point.year} className="grid h-full items-end gap-2">
+                          <div className="summary-trend-track">
+                            <div
+                              className={`summary-trend-bar tile-tone-${index % 4}`}
+                              style={{
+                                height: `${Math.max(18, Math.min(100, point.average))}%`,
+                                animationDelay: `${index * 140}ms`,
+                              }}
+                            />
+                          </div>
+                          <div className="text-center text-xs font-semibold text-white/70">
+                            {point.year}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="grid min-h-0 gap-3">
+                  {latestIndicators.map((indicator, index) => (
+                    (() => {
+                      const Icon = serviceIcon(indicator.category);
+
+                      return (
+                    <div
+                      key={indicator.id}
+                      className={`executive-monitor-tile executive-indicator-tile tile-tone-${index % 4}`}
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="summary-service-icon">
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-100/70">
+                          {indicator.category}
+                        </p>
+                        <h4 className="mt-1 font-bold leading-tight text-white">
+                          {indicator.name}
+                        </h4>
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/65">
+                          {indicator.description}
+                        </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-3xl font-bold text-white">
+                          {formatNumber(indicator.value)}
+                          {indicator.unit === "persen" ? "%" : ""}
+                        </p>
+                        <p className="text-xs text-white/60">Tahun {indicator.year}</p>
+                      </div>
+                    </div>
+                      );
+                    })()
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {activeSlide === 1 ? (
+              <div className="grid h-full gap-4 lg:grid-cols-2">
+                {featuredAwards.map(({ award, ...collection }) => (
+                  <div key={collection.id} className="executive-monitor-card overflow-hidden">
+                    {award ? (
+                      <div className="relative h-full min-h-[420px]">
+                        <Image
+                          src={award.imageUrl}
+                          alt={award.alt}
+                          fill
+                          sizes="50vw"
+                          className="object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/24 to-white/10" />
+                        <div className="absolute inset-x-5 bottom-5 rounded-lg border border-white/25 bg-white/20 p-5 text-white shadow-glass backdrop-blur-2xl">
+                          <Badge className="mb-3 w-fit bg-white/20 text-white">
+                            {collection.items.length} Foto
+                          </Badge>
+                          <h3 className="text-2xl font-bold leading-tight">
+                            {collection.title}
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-white/75">
+                            {collection.description}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeSlide === 2 ? (
+              <div className="grid h-full gap-4 xl:grid-cols-[0.78fr_1.22fr]">
+                <div className="executive-monitor-card executive-agenda-card p-5 md:p-7">
+                  <div className="relative z-10">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="w-fit rounded-lg border border-amber-200/35 bg-amber-200/20 p-3 text-amber-100 shadow-sm backdrop-blur-2xl">
+                        <Landmark className="h-8 w-8" />
+                      </div>
+                      <BrandMark compact />
+                    </div>
+                    <h3 className="mt-6 text-4xl font-bold text-white">Agenda Pimpinan</h3>
+                    <p className="mt-3 max-w-xl text-base leading-7 text-white/70">
+                      Jadwal prioritas, koordinasi, dan monitoring lapangan diringkas
+                      agar mudah dipantau dari layar pimpinan.
+                    </p>
+                  </div>
+                  <div className="relative z-10 mt-8 grid gap-3">
+                    <MonitorStat
+                      label="Agenda"
+                      value={String(data.executiveSchedules.length)}
+                      tone="emerald"
+                    />
+                    <MonitorStat
+                      label="Prioritas"
+                      value={String(
+                        data.executiveSchedules.filter(
+                          (schedule) => schedule.priority === "utama",
+                        ).length,
+                      )}
+                      tone="amber"
+                    />
+                    <MonitorStat
+                      label="Berjalan"
+                      value={String(
+                        data.executiveSchedules.filter(
+                          (schedule) => schedule.status === "berjalan",
+                        ).length,
+                      )}
+                      tone="cyan"
+                    />
+                  </div>
+                  <div className="relative z-10 mt-8 rounded-lg border border-white/20 bg-white/10 p-4 text-sm leading-6 text-white/70 backdrop-blur-2xl">
+                    Status agenda dibedakan warna agar pimpinan cepat membaca jadwal
+                    berjalan, terjadwal, dan selesai.
+                  </div>
+                </div>
+                <div className="grid content-start gap-3 overflow-hidden">
+                  {data.executiveSchedules.map((schedule) => (
+                    <div key={schedule.id} className="executive-monitor-tile">
+                      <div className="min-w-0">
+                        <Badge
+                          variant={schedule.priority === "utama" ? "success" : "outline"}
+                          className="mb-2 w-fit bg-white/20 text-white"
+                        >
+                          {priorityLabel(schedule.priority)}
+                        </Badge>
+                        <h4 className="font-bold leading-snug text-white">{schedule.title}</h4>
+                        <p className="mt-1 text-sm text-white/60">{schedule.unit}</p>
+                        <p className="mt-2 inline-flex items-start gap-1.5 text-sm text-emerald-100">
+                          <MapPinned className="mt-0.5 h-4 w-4 shrink-0" />
+                          {schedule.location}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-white">{schedule.date}</p>
+                        <p className="mt-1 text-sm text-white/65">{schedule.time}</p>
+                        <span className={`${statusBadgeClass(schedule.status)} mt-3`}>
+                          {statusLabel(schedule.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {activeSlide === 3 ? (
+              <div className="executive-monitor-card grid h-full gap-4 p-5 md:p-7">
+                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/75">
+                      Dashboard Interaktif
+                    </p>
+                    <h3 className="mt-2 text-3xl font-bold text-white md:text-4xl">
+                      Tren indikator layanan per tahun
+                    </h3>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[400px]">
+                    <MonitorStat label="Tahun" value={String(trendSnapshot.latestYear)} />
+                    <MonitorStat label="Rata-rata" value={formatNumber(trendSnapshot.average)} />
+                    <MonitorStat
+                      label="Tertinggi"
+                      value={formatNumber(trendSnapshot.strongestValue)}
+                    />
+                  </div>
+                </div>
+                <div className="min-h-[420px] rounded-lg border border-white/20 bg-white/10 p-3 backdrop-blur-2xl">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartSeries} margin={{ top: 24, right: 24, bottom: 8, left: 0 }}>
+                      <CartesianGrid
+                        vertical={false}
+                        strokeDasharray="4 10"
+                        stroke="rgba(255, 255, 255, 0.18)"
+                      />
+                      <XAxis
+                        dataKey="year"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "rgba(255,255,255,0.72)", fontSize: 12, fontWeight: 700 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "rgba(255,255,255,0.62)", fontSize: 12, fontWeight: 700 }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "rgba(255, 255, 255, 0.78)",
+                          border: "1px solid rgba(255, 255, 255, 0.8)",
+                          borderRadius: "12px",
+                          boxShadow: "0 24px 70px rgba(0, 0, 0, 0.22)",
+                          backdropFilter: "blur(18px)",
+                        }}
+                      />
+                      <Legend wrapperStyle={{ color: "#ffffff", fontWeight: 700 }} />
+                      {visibleCategories.map((item) => (
+                        <Area
+                          key={item}
+                          type="monotone"
+                          dataKey={item}
+                          stroke={chartColors[item as keyof typeof chartColors]}
+                          fill={chartColors[item as keyof typeof chartColors]}
+                          fillOpacity={0.1}
+                          strokeWidth={4}
+                          dot={{ r: 3, fill: "#fff" }}
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : null}
+
+            {activeSlide === 4 ? (
+              <div className="grid h-full gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="executive-monitor-card p-5 md:p-7">
+                  <h3 className="text-3xl font-bold text-white">Komposisi Kategori</h3>
+                  <p className="mt-3 text-base leading-7 text-white/70">
+                    Akumulasi nilai tiap bidang layanan untuk pembacaan cepat.
+                  </p>
+                  <div className="mt-8 grid gap-3">
+                    {Object.entries(categoryTotals).map(([name, value]) => (
+                      <div key={name} className="executive-monitor-tile">
+                        <span className="font-semibold text-white">{name}</span>
+                        <strong className="text-2xl text-white">{formatNumber(value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="executive-monitor-card p-5 md:p-7">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={monitorPieData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius="48%"
+                        outerRadius="78%"
+                        paddingAngle={5}
+                      >
+                        {monitorPieData.map((entry) => (
+                          <Cell
+                            key={entry.name}
+                            fill={chartColors[entry.name as keyof typeof chartColors] ?? "#64748b"}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend wrapperStyle={{ color: "#ffffff", fontWeight: 700 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : null}
+
+            {activeSlide === 5 ? (
+              <div className="grid h-full gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="executive-monitor-card p-5 md:p-7">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/75">
+                    Publikasi
+                  </p>
+                  <h3 className="mt-2 text-3xl font-bold text-white md:text-4xl">
+                    Dokumen resmi dan materi informasi
+                  </h3>
+                  <div className="mt-6 grid gap-3">
+                    {data.publications.map((publication) => (
+                      <div key={publication.id} className="executive-monitor-tile">
+                        <div>
+                          <Badge className="mb-2 w-fit bg-white/20 text-white">
+                            {publication.category}
+                          </Badge>
+                          <h4 className="font-bold text-white">{publication.title}</h4>
+                          <p className="mt-1 text-sm leading-6 text-white/65">
+                            {publication.description}
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold text-white/75">
+                          {publication.date}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="executive-monitor-card p-5 md:p-7">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/75">
+                    Kontak Resmi
+                  </p>
+                  <h3 className="mt-2 text-3xl font-bold text-white">
+                    {data.contact.institution}
+                  </h3>
+                  <div className="mt-7 grid gap-3">
+                    <MonitorInfo icon={MapPin} label="Alamat" value={data.contact.address} />
+                    <MonitorInfo icon={Phone} label="Telepon" value={data.contact.phone} />
+                    <MonitorInfo icon={Mail} label="Email" value={data.contact.email} />
+                    <MonitorInfo icon={Globe2} label="Website" value={data.contact.website} />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="h-2 overflow-hidden rounded-full border border-white/20 bg-white/10 backdrop-blur-2xl">
+              <div
+                key={`${activeSlide}-${playing}`}
+                className={`executive-monitor-progress ${playing ? "running" : ""}`}
+                style={{ animationDuration: `${intervalMs}ms` }}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-white/70 md:justify-end">
+              <span>
+                Slide {activeSlide + 1}/{slides.length}
+              </span>
+              <span>{playing ? "Auto play" : "Paused"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function SummaryDataCard({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  helper: string;
+  icon: ElementType;
+  tone: "emerald" | "cyan" | "amber" | "violet";
+}) {
+  return (
+    <div className={`summary-data-card monitor-stat-${tone}`}>
+      <span className="summary-data-icon">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
+          {label}
+        </p>
+        <p className="mt-1 text-2xl font-bold leading-none text-white">
+          {formatNumber(value)}
+        </p>
+        <p className="mt-1 truncate text-xs text-white/65">{helper}</p>
+      </div>
+    </div>
+  );
+}
+
+function MonitorStat({
+  label,
+  value,
+  tone = "emerald",
+}: {
+  label: string;
+  value: string;
+  tone?: "emerald" | "cyan" | "amber" | "violet";
+}) {
+  return (
+    <div className={`monitor-stat monitor-stat-${tone}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100/70">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-bold leading-none text-white">{value}</p>
+    </div>
+  );
+}
+
+function MonitorInfo({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ElementType;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex gap-3 rounded-lg border border-white/20 bg-white/10 p-4 text-white shadow-sm backdrop-blur-2xl">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-100" />
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/55">
+          {label}
+        </p>
+        <p className="mt-1 font-medium leading-6 text-white/85">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -1302,9 +2135,7 @@ function Footer({ contact }: { contact: DashboardData["contact"] }) {
       <div className="container grid gap-8 py-8 md:grid-cols-[1.2fr_0.8fr_0.8fr]">
         <div>
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-md border border-white/20 bg-primary/90 text-white shadow-sm">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
+            <BrandMark compact />
             <div>
               <p className="font-bold">Dashboard Digital Kanwil</p>
               <p className="text-sm text-white/70">{contact.institution}</p>
