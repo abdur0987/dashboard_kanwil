@@ -89,8 +89,8 @@ export const executiveSchedules = sqliteTable("dashboard_executive_schedules", {
   title: text("title").notNull(),
   unit: text("unit").notNull(),
   location: text("location").notNull(),
-  priority: text("priority", { enum: ["utama", "koordinasi", "monitoring"] }).notNull(),
-  status: text("status", { enum: ["terjadwal", "berjalan", "selesai"] }).notNull(),
+  priority: text("priority", { enum: ["utama", "-"] }).notNull(),
+  status: text("status", { enum: ["terjadwal", "berjalan", "selesai", "belum"] }).notNull(),
 });
 
 export const awardCollections = sqliteTable("dashboard_award_collections", {
@@ -121,6 +121,45 @@ export const publications = sqliteTable("dashboard_publications", {
   date: text("date").notNull(),
   category: text("category").notNull(),
   fileLabel: text("file_label").notNull(),
+});
+
+export const datasets = sqliteTable("dashboard_datasets", {
+  id: integer("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  year: integer("year").notNull(),
+  producer: text("producer").notNull(),
+  frequency: text("frequency").notNull(),
+  format: text("format").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  excelUrl: text("excel_url").notNull(),
+  pdfUrl: text("pdf_url").notNull(),
+  standardData: text("standard_data").notNull(),
+  metadata: text("metadata").notNull(),
+});
+
+export const releaseSchedules = sqliteTable("dashboard_release_schedules", {
+  id: integer("id").primaryKey(),
+  title: text("title").notNull(),
+  period: text("period").notNull(),
+  language: text("language").notNull(),
+  scheduledDate: text("scheduled_date").notNull(),
+  realizedDate: text("realized_date").notNull(),
+  status: text("status", { enum: ["rencana", "rilis"] }).notNull(),
+  documentUrl: text("document_url").notNull(),
+  format: text("format").notNull(),
+});
+
+export const officeLocations = sqliteTable("dashboard_office_locations", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type", { enum: ["kanwil", "kabupaten-kota"] }).notNull(),
+  address: text("address").notNull(),
+  phone: text("phone").notNull(),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  mapsUrl: text("maps_url").notNull(),
 });
 
 export const activities = sqliteTable("dashboard_activities", {

@@ -144,6 +144,45 @@ export async function ensureDatabaseReady() {
       file_label TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dashboard_datasets (
+      id INTEGER PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      year INTEGER NOT NULL,
+      producer TEXT NOT NULL,
+      frequency TEXT NOT NULL,
+      format TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      excel_url TEXT NOT NULL,
+      pdf_url TEXT NOT NULL,
+      standard_data TEXT NOT NULL,
+      metadata TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dashboard_release_schedules (
+      id INTEGER PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      period TEXT NOT NULL,
+      language TEXT NOT NULL,
+      scheduled_date TEXT NOT NULL,
+      realized_date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      document_url TEXT NOT NULL,
+      format TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dashboard_office_locations (
+      id INTEGER PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      address TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      maps_url TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dashboard_activities (
       id INTEGER PRIMARY KEY NOT NULL,
       title TEXT NOT NULL,

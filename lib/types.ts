@@ -27,11 +27,7 @@ export type DashboardRow = {
 
 export type ChartPoint = {
   year: number;
-  "Pendidikan Madrasah": number;
-  "Bimas Islam": number;
-  "SPAK": number;
-  "Layanan Publik": number;
-};
+} & Record<string, number>;
 
 export type Publication = {
   id: number;
@@ -40,6 +36,65 @@ export type Publication = {
   date: string;
   category: string;
   fileLabel: string;
+};
+
+export type DataCatalog = {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  year: number;
+  producer: string;
+  frequency: string;
+  format: string;
+  sourceUrl: string;
+  excelUrl: string;
+  pdfUrl: string;
+  standardData: string;
+  metadata: string;
+};
+
+export type DatasetDetail = {
+  id: string;
+  datasetId: number;
+  tableNumber: string;
+  title: string;
+  module: string;
+  category: string;
+  year: number;
+  producer: string;
+  description: string;
+  headers: string[];
+  rows: (string | number)[][];
+  chartData: {
+    label: string;
+    value: number;
+  }[];
+  standardData: string;
+  metadata: string;
+};
+
+export type ReleaseSchedule = {
+  id: number;
+  title: string;
+  period: string;
+  language: string;
+  scheduledDate: string;
+  realizedDate: string;
+  status: "rencana" | "rilis";
+  documentUrl: string;
+  format: string;
+};
+
+export type OfficeLocation = {
+  id: number;
+  name: string;
+  type: "kanwil" | "kabupaten-kota";
+  address: string;
+  phone: string;
+  latitude: number;
+  longitude: number;
+  mapsUrl: string;
 };
 
 export type ActivitySlide = {
@@ -56,6 +111,15 @@ export type VideoItem = {
   embedUrl: string;
 };
 
+export type NewsItem = {
+  id: number;
+  title: string;
+  category: string;
+  date: string;
+  imageUrl: string;
+  url: string;
+};
+
 export type ExecutiveSchedule = {
   id: number;
   date: string;
@@ -63,8 +127,8 @@ export type ExecutiveSchedule = {
   title: string;
   unit: string;
   location: string;
-  priority: "utama" | "koordinasi" | "monitoring";
-  status: "terjadwal" | "berjalan" | "selesai";
+  priority: "utama" | "-";
+  status: "terjadwal" | "berjalan" | "selesai" | "belum";
 };
 
 export type AwardItem = {
@@ -100,8 +164,13 @@ export type DashboardData = {
   rows: DashboardRow[];
   chartSeries: ChartPoint[];
   publications: Publication[];
+  datasets: DataCatalog[];
+  datasetDetails: DatasetDetail[];
+  releaseSchedules: ReleaseSchedule[];
+  officeLocations: OfficeLocation[];
   activities: ActivitySlide[];
   videos: VideoItem[];
+  latestNews: NewsItem[];
   executiveSchedules: ExecutiveSchedule[];
   awardCollections: AwardCollection[];
   contact: ContactInfo;

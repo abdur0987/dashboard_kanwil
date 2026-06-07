@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowLeft,
+  BrainCircuit,
   Database,
   FileJson,
+  FileUp,
   LayoutDashboard,
+  Layers,
   LogIn,
   LogOut,
   MapPin,
@@ -14,6 +17,7 @@ import {
   Save,
   Settings,
   Trash2,
+  Upload,
   UserPlus,
   Video,
 } from "lucide-react";
@@ -33,11 +37,14 @@ import { authClient } from "@/lib/auth-client";
 import type {
   ActivitySlide,
   ContactInfo,
+  DataCatalog,
   DashboardData,
   DashboardRow,
   Indicator,
   IndicatorStatus,
+  OfficeLocation,
   Publication,
+  ReleaseSchedule,
   VideoItem,
 } from "@/lib/types";
 
@@ -49,24 +56,86 @@ type AdminTab =
   | "overview"
   | "indicators"
   | "datasets"
+  | "catalog"
+  | "geotagging"
   | "content"
   | "contact"
-  | "account";
+  | "account"
+  | "ai";
+
+type AdminStats = {
+  indicatorCount: number;
+  rowCount: number;
+  publicationCount: number;
+  datasetCount: number;
+  releaseCount: number;
+  officeCount: number;
+  mediaCount: number;
+  latestYear: number | string;
+  validationCount: number;
+};
 
 const tabs: { id: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Ringkasan", icon: LayoutDashboard },
   { id: "indicators", label: "Indikator", icon: Database },
   { id: "datasets", label: "Data Tabel", icon: FileJson },
+  { id: "catalog", label: "Dataset & Rilis", icon: FileUp },
+  { id: "geotagging", label: "Geotagging", icon: MapPin },
   { id: "content", label: "Konten", icon: Video },
+  { id: "ai", label: "AI Training", icon: BrainCircuit },
   { id: "contact", label: "Kontak", icon: MapPin },
   { id: "account", label: "Akun Admin", icon: Settings },
 ];
+
+const baseCategories = [
+  "Pendidikan Madrasah",
+  "Bimas Islam",
+  "SPAK",
+  "Layanan Publik",
+  "IPS",
+];
+
+const lampungRegions = [
+  "Kanwil Lampung",
+  "Lampung Barat",
+  "Tanggamus",
+  "Lampung Selatan",
+  "Lampung Timur",
+  "Lampung Tengah",
+  "Lampung Utara",
+  "Way Kanan",
+  "Tulang Bawang",
+  "Pesawaran",
+  "Pringsewu",
+  "Mesuji",
+  "Tulang Bawang Barat",
+  "Pesisir Barat",
+  "Bandar Lampung",
+  "Metro",
+];
+
+type ImportResponse = {
+  rows: Omit<DashboardRow, "id">[];
+  indicator: Omit<Indicator, "id">;
+  meta?: {
+    fileName?: string;
+    records?: number;
+  };
+  error?: string;
+};
 
 export function AdminExperience({ data }: AdminExperienceProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [indicators, setIndicators] = useState<Indicator[]>(data.indicators);
   const [rows, setRows] = useState<DashboardRow[]>(data.rows);
   const [publications, setPublications] = useState<Publication[]>(data.publications);
+  const [datasets, setDatasets] = useState<DataCatalog[]>(data.datasets);
+  const [releaseSchedules, setReleaseSchedules] = useState<ReleaseSchedule[]>(
+    data.releaseSchedules,
+  );
+  const [officeLocations, setOfficeLocations] = useState<OfficeLocation[]>(
+    data.officeLocations,
+  );
   const [activities, setActivities] = useState<ActivitySlide[]>(data.activities);
   const [videos, setVideos] = useState<VideoItem[]>(data.videos);
   const [contact, setContact] = useState<ContactInfo>(data.contact);
@@ -96,28 +165,43 @@ export function AdminExperience({ data }: AdminExperienceProps) {
     setAccountEmail(session.data.user.email);
   }, [session.data?.user]);
 
+  const normalizedFilters = useMemo(
+    () => buildDashboardFilters(data.filters, indicators, rows),
+    [data.filters, indicators, rows],
+  );
+  const normalizedChartSeries = useMemo(
+    () => buildChartSeriesFromRows(rows, normalizedFilters.categories),
+    [normalizedFilters.categories, rows],
+  );
+
   const snapshot = useMemo(
     () => ({
       indicators,
       rows,
-      chartSeries: data.chartSeries,
+      chartSeries: normalizedChartSeries,
       publications,
+      datasets,
+      releaseSchedules,
+      officeLocations,
       activities,
       videos,
       executiveSchedules: data.executiveSchedules,
       awardCollections: data.awardCollections,
       contact,
-      filters: data.filters,
+      filters: normalizedFilters,
     }),
     [
       activities,
       contact,
-      data.chartSeries,
       data.awardCollections,
       data.executiveSchedules,
-      data.filters,
+      datasets,
       indicators,
+      normalizedChartSeries,
+      normalizedFilters,
+      officeLocations,
       publications,
+      releaseSchedules,
       rows,
       videos,
     ],
@@ -133,11 +217,23 @@ export function AdminExperience({ data }: AdminExperienceProps) {
       indicatorCount: indicators.length,
       rowCount: rows.length,
       publicationCount: publications.length,
+      datasetCount: datasets.length,
+      releaseCount: releaseSchedules.length,
+      officeCount: officeLocations.length,
       mediaCount: activities.length + videos.length,
       latestYear,
       validationCount,
     };
-  }, [activities.length, indicators, publications.length, rows, videos.length]);
+  }, [
+    activities.length,
+    datasets.length,
+    indicators,
+    officeLocations.length,
+    publications.length,
+    releaseSchedules.length,
+    rows,
+    videos.length,
+  ]);
 
   function exportJson() {
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
@@ -291,7 +387,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
         category: "Layanan Publik",
         unit: "persen",
         source: "Sumber Data",
-        year: 2026,
+        year: 2025,
         value: 0,
         trend: 0,
         status: "perlu-validasi",
@@ -317,6 +413,56 @@ export function AdminExperience({ data }: AdminExperienceProps) {
     ]);
   }
 
+  function handleImportedDataset(
+    importedRows: Omit<DashboardRow, "id">[],
+    importedIndicator: Omit<Indicator, "id">,
+  ) {
+    if (!importedRows.length) {
+      return;
+    }
+
+    const category = importedIndicator.category;
+    const year = importedIndicator.year;
+
+    setRows((current) => {
+      const retained = current.filter(
+        (row) => !(row.category === category && row.year === year),
+      );
+      const startId = nextNumericId(retained);
+
+      return [
+        ...retained,
+        ...importedRows.map((row, index) => ({
+          ...row,
+          id: startId + index,
+        })),
+      ];
+    });
+
+    setIndicators((current) => {
+      const existing = current.find((indicator) => indicator.category === category);
+
+      if (existing) {
+        return current.map((indicator) =>
+          indicator.id === existing.id
+            ? {
+                ...indicator,
+                ...importedIndicator,
+              }
+            : indicator,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          ...importedIndicator,
+          id: nextNumericId(current),
+        },
+      ];
+    });
+  }
+
   function addPublication() {
     const nextId = nextNumericId(publications);
     setPublications((current) => [
@@ -328,6 +474,65 @@ export function AdminExperience({ data }: AdminExperienceProps) {
         date: "17 Mei 2026",
         category: "Laporan",
         fileLabel: "PDF",
+      },
+    ]);
+  }
+
+  function addDataset() {
+    const nextId = nextNumericId(datasets);
+    setDatasets((current) => [
+      ...current,
+      {
+        id: nextId,
+        title: "Dataset Baru Kanwil Kemenag Lampung",
+        description: "Deskripsi ringkas dataset untuk pengguna publik.",
+        category: "Tata Kelola",
+        year: 2026,
+        producer: "Kanwil Kemenag Provinsi Lampung",
+        frequency: "Tahunan",
+        format: "XLSX, PDF",
+        sourceUrl: "",
+        excelUrl: "",
+        pdfUrl: "",
+        standardData:
+          "Deskripsi standar data: kolom wilayah, indikator, nilai, satuan, dan tahun.",
+        metadata:
+          "Sumber: Kanwil Kemenag Provinsi Lampung\nVersi: 1\nFrekuensi: Tahunan\nDapat Diakses Publik: Ya",
+      },
+    ]);
+  }
+
+  function addReleaseSchedule() {
+    const nextId = nextNumericId(releaseSchedules);
+    setReleaseSchedules((current) => [
+      ...current,
+      {
+        id: nextId,
+        title: "Jadwal Rilis Publikasi Baru",
+        period: "2026",
+        language: "Indonesia",
+        scheduledDate: "01-03-2026",
+        realizedDate: "-",
+        status: "rencana",
+        documentUrl: "",
+        format: "PDF",
+      },
+    ]);
+  }
+
+  function addOfficeLocation() {
+    const nextId = nextNumericId(officeLocations);
+    setOfficeLocations((current) => [
+      ...current,
+      {
+        id: nextId,
+        name: "Kantor Kementerian Agama",
+        type: "kabupaten-kota",
+        address: "Alamat kantor",
+        phone: "-",
+        latitude: -5.39714,
+        longitude: 105.26679,
+        mapsUrl: "",
       },
     ]);
   }
@@ -460,7 +665,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
             {activeTab === "indicators" ? (
               <IndicatorsPanel
                 indicators={indicators}
-                categories={data.filters.categories}
+                categories={normalizedFilters.categories}
                 onAdd={addIndicator}
                 onDelete={(id) =>
                   setIndicators((current) => current.filter((item) => item.id !== id))
@@ -478,14 +683,65 @@ export function AdminExperience({ data }: AdminExperienceProps) {
             {activeTab === "datasets" ? (
               <RowsPanel
                 rows={rows}
-                categories={data.filters.categories}
-                regions={data.filters.regions}
+                categories={normalizedFilters.categories}
+                regions={normalizedFilters.regions}
                 onAdd={addRow}
                 onDelete={(id) =>
                   setRows((current) => current.filter((item) => item.id !== id))
                 }
                 onUpdate={(id, patch) =>
                   setRows((current) =>
+                    current.map((item) =>
+                      item.id === id ? { ...item, ...patch } : item,
+                    ),
+                  )
+                }
+                onImport={handleImportedDataset}
+              />
+            ) : null}
+
+            {activeTab === "catalog" ? (
+              <CatalogPanel
+                datasets={datasets}
+                releaseSchedules={releaseSchedules}
+                onAddDataset={addDataset}
+                onAddReleaseSchedule={addReleaseSchedule}
+                onDeleteDataset={(id) =>
+                  setDatasets((current) => current.filter((item) => item.id !== id))
+                }
+                onDeleteReleaseSchedule={(id) =>
+                  setReleaseSchedules((current) =>
+                    current.filter((item) => item.id !== id),
+                  )
+                }
+                onUpdateDataset={(id, patch) =>
+                  setDatasets((current) =>
+                    current.map((item) =>
+                      item.id === id ? { ...item, ...patch } : item,
+                    ),
+                  )
+                }
+                onUpdateReleaseSchedule={(id, patch) =>
+                  setReleaseSchedules((current) =>
+                    current.map((item) =>
+                      item.id === id ? { ...item, ...patch } : item,
+                    ),
+                  )
+                }
+              />
+            ) : null}
+
+            {activeTab === "geotagging" ? (
+              <GeotaggingAdminPanel
+                offices={officeLocations}
+                onAdd={addOfficeLocation}
+                onDelete={(id) =>
+                  setOfficeLocations((current) =>
+                    current.filter((item) => item.id !== id),
+                  )
+                }
+                onUpdate={(id, patch) =>
+                  setOfficeLocations((current) =>
                     current.map((item) =>
                       item.id === id ? { ...item, ...patch } : item,
                     ),
@@ -558,6 +814,8 @@ export function AdminExperience({ data }: AdminExperienceProps) {
                 onSavePassword={saveAccountPassword}
               />
             ) : null}
+
+            {activeTab === "ai" ? <AiTrainingPanel stats={stats} /> : null}
           </section>
         </div>
       </div>
@@ -697,25 +955,21 @@ function AuthScreen({
 function OverviewPanel({
   stats,
 }: {
-  stats: {
-    indicatorCount: number;
-    rowCount: number;
-    publicationCount: number;
-    mediaCount: number;
-    latestYear: number | string;
-    validationCount: number;
-  };
+  stats: AdminStats;
 }) {
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <AdminMetric label="Indikator" value={stats.indicatorCount} helper="kartu strategis" />
         <AdminMetric label="Baris Data" value={stats.rowCount} helper="siap difilter" />
+        <AdminMetric label="Dataset" value={stats.datasetCount} helper="katalog satu data" />
+        <AdminMetric label="Alamat" value={stats.officeCount} helper="titik geotagging" />
         <AdminMetric
           label="Publikasi"
           value={stats.publicationCount}
           helper="dokumen tampil"
         />
+        <AdminMetric label="Jadwal Rilis" value={stats.releaseCount} helper="publikasi data" />
         <AdminMetric label="Media" value={stats.mediaCount} helper="video dan slide" />
       </div>
       <Card>
@@ -739,6 +993,102 @@ function OverviewPanel({
   );
 }
 
+function AiTrainingPanel({ stats }: { stats: AdminStats }) {
+  const [isTraining, setIsTraining] = useState(false);
+  const [message, setMessage] = useState("");
+  const [trainedAt, setTrainedAt] = useState("");
+  const [summary, setSummary] = useState<Record<string, number> | null>(null);
+
+  async function handleTrain() {
+    setIsTraining(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/assistant/train", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        trainedAt?: string;
+        summary?: Record<string, number>;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Training ulang AI gagal.");
+      }
+
+      setTrainedAt(payload.trainedAt ?? new Date().toISOString());
+      setSummary(payload.summary ?? null);
+      setMessage("AI Kemenag sudah membaca ulang data dashboard terbaru.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Training ulang AI gagal.");
+    } finally {
+      setIsTraining(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-4">
+      {message ? (
+        <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm font-medium text-emerald-900 shadow-sm backdrop-blur-xl">
+          {message}
+        </div>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Training Ulang AI Kemenag</CardTitle>
+          <CardDescription>
+            Pakai tombol ini setelah admin menambah data, upload dataset, atau
+            memperbarui konten agar AI membaca ulang seluruh informasi dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatusRow label="Indikator" value={`${stats.indicatorCount} data`} />
+            <StatusRow label="Baris dashboard" value={`${stats.rowCount} data`} />
+            <StatusRow label="Dataset" value={`${stats.datasetCount} katalog`} />
+            <StatusRow label="Tahun terbaru" value={String(stats.latestYear)} />
+          </div>
+          <Button onClick={handleTrain} disabled={isTraining} className="h-11">
+            {isTraining ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <BrainCircuit className="h-4 w-4" />
+            )}
+            {isTraining ? "Membaca ulang..." : "Training Ulang AI"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Status Pengetahuan AI</CardTitle>
+          <CardDescription>
+            Ringkasan sumber data yang akan dipakai AI untuk menjawab pertanyaan
+            dashboard dan membuat poin penting pimpinan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <StatusRow
+            label="Terakhir training"
+            value={trainedAt ? new Date(trainedAt).toLocaleString("id-ID") : "Belum dijalankan"}
+          />
+          <StatusRow
+            label="Dataset detail"
+            value={`${summary?.datasetDetails ?? 0} tabel`}
+          />
+          <StatusRow label="Agenda SIMANDA" value={`${summary?.schedules ?? 0} agenda`} />
+          <StatusRow label="Berita terbaru" value={`${summary?.news ?? 0} berita`} />
+          <StatusRow label="Penghargaan" value={`${summary?.awards ?? 0} foto`} />
+          <StatusRow label="Geotagging" value={`${summary?.offices ?? 0} kantor`} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function IndicatorsPanel({
   indicators,
   categories,
@@ -752,13 +1102,17 @@ function IndicatorsPanel({
   onDelete: (id: number) => void;
   onUpdate: (id: number, patch: Partial<Indicator>) => void;
 }) {
+  const categoryOptions = normalizeCategoryOptions(categories);
+  const groupedIndicators = groupByCategory(indicators);
+
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div>
           <CardTitle>Manajemen Indikator Strategis</CardTitle>
           <CardDescription>
-            Ubah nama, kategori, angka utama, sumber, dan status validasi.
+            Indikator dikelompokkan per kategori agar lebih mudah dipantau dan
+            diperbarui.
           </CardDescription>
         </div>
         <Button onClick={onAdd}>
@@ -766,78 +1120,99 @@ function IndicatorsPanel({
           Tambah
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        {indicators.map((indicator) => (
+      <CardContent className="grid gap-5">
+        {groupedIndicators.map(([categoryName, items]) => (
           <div
-            key={indicator.id}
+            key={categoryName}
             className="rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl"
           >
-            <div className="grid gap-3 lg:grid-cols-[1.3fr_0.9fr_0.6fr_0.6fr]">
-              <InputField
-                label="Nama indikator"
-                value={indicator.name}
-                onChange={(value) => onUpdate(indicator.id, { name: value })}
-              />
-              <Select
-                label="Kategori"
-                value={indicator.category}
-                options={categories
-                  .filter((item) => item !== "Semua Kategori")
-                  .map((item) => ({ label: item, value: item }))}
-                onChange={(value) => onUpdate(indicator.id, { category: value })}
-              />
-              <InputField
-                label="Nilai"
-                type="number"
-                value={indicator.value}
-                onChange={(value) =>
-                  onUpdate(indicator.id, { value: Number(value) })
-                }
-              />
-              <InputField
-                label="Tahun"
-                type="number"
-                value={indicator.year}
-                onChange={(value) => onUpdate(indicator.id, { year: Number(value) })}
-              />
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                  {categoryName}
+                </p>
+                <h3 className="text-lg font-bold text-slate-950">
+                  {items.length} indikator
+                </h3>
+              </div>
+              <Badge variant="outline">{items[0]?.year ?? "-"}</Badge>
             </div>
-            <div className="mt-3 grid gap-3 lg:grid-cols-[1.2fr_0.5fr_0.7fr_0.6fr]">
-              <InputField
-                label="Deskripsi"
-                value={indicator.description}
-                onChange={(value) => onUpdate(indicator.id, { description: value })}
-              />
-              <InputField
-                label="Satuan"
-                value={indicator.unit}
-                onChange={(value) => onUpdate(indicator.id, { unit: value })}
-              />
-              <InputField
-                label="Sumber"
-                value={indicator.source}
-                onChange={(value) => onUpdate(indicator.id, { source: value })}
-              />
-              <Select
-                label="Status"
-                value={indicator.status}
-                options={[
-                  { label: "Aktif", value: "aktif" },
-                  { label: "Perlu Validasi", value: "perlu-validasi" },
-                ]}
-                onChange={(value) =>
-                  onUpdate(indicator.id, { status: value as IndicatorStatus })
-                }
-              />
-            </div>
-            <div className="mt-3 flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onDelete(indicator.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Hapus
-              </Button>
+
+            <div className="grid gap-3">
+              {items.map((indicator) => (
+                <div
+                  key={indicator.id}
+                  className="grid gap-3 rounded-md border border-white/70 bg-white/55 p-3 lg:grid-cols-[1.2fr_0.78fr_0.42fr_0.36fr_0.46fr_auto]"
+                >
+                  <InputField
+                    label="Nama indikator"
+                    value={indicator.name}
+                    onChange={(value) => onUpdate(indicator.id, { name: value })}
+                  />
+                  <Select
+                    label="Kategori"
+                    value={indicator.category}
+                    options={categoryOptions}
+                    onChange={(value) => onUpdate(indicator.id, { category: value })}
+                  />
+                  <InputField
+                    label="Nilai"
+                    type="number"
+                    value={indicator.value}
+                    onChange={(value) =>
+                      onUpdate(indicator.id, { value: Number(value) })
+                    }
+                  />
+                  <InputField
+                    label="Tahun"
+                    type="number"
+                    value={indicator.year}
+                    onChange={(value) =>
+                      onUpdate(indicator.id, { year: Number(value) })
+                    }
+                  />
+                  <Select
+                    label="Status"
+                    value={indicator.status}
+                    options={[
+                      { label: "Aktif", value: "aktif" },
+                      { label: "Perlu Validasi", value: "perlu-validasi" },
+                    ]}
+                    onChange={(value) =>
+                      onUpdate(indicator.id, { status: value as IndicatorStatus })
+                    }
+                  />
+                  <div className="flex items-end justify-end">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => onDelete(indicator.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <TextAreaField
+                    className="lg:col-span-3"
+                    label="Deskripsi"
+                    value={indicator.description}
+                    onChange={(value) =>
+                      onUpdate(indicator.id, { description: value })
+                    }
+                  />
+                  <InputField
+                    className="lg:col-span-1"
+                    label="Satuan"
+                    value={indicator.unit}
+                    onChange={(value) => onUpdate(indicator.id, { unit: value })}
+                  />
+                  <InputField
+                    className="lg:col-span-2"
+                    label="Sumber"
+                    value={indicator.source}
+                    onChange={(value) => onUpdate(indicator.id, { source: value })}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -853,6 +1228,7 @@ function RowsPanel({
   onAdd,
   onDelete,
   onUpdate,
+  onImport,
 }: {
   rows: DashboardRow[];
   categories: string[];
@@ -860,14 +1236,76 @@ function RowsPanel({
   onAdd: () => void;
   onDelete: (id: number) => void;
   onUpdate: (id: number, patch: Partial<DashboardRow>) => void;
+  onImport: (
+    rows: Omit<DashboardRow, "id">[],
+    indicator: Omit<Indicator, "id">,
+  ) => void;
 }) {
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState("IPS");
+  const [uploadYear, setUploadYear] = useState(2025);
+  const [uploadUnit, setUploadUnit] = useState("indeks");
+  const [uploadIndicator, setUploadIndicator] = useState(
+    "Nilai Indeks Pembangunan Statistik",
+  );
+  const [uploadSource, setUploadSource] = useState("Rekap IPS Kanwil Kemenag Lampung");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const categoryOptions = normalizeCategoryOptions(categories);
+  const groupedRows = groupByCategory(rows);
+
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setUploadMessage("");
+
+    if (!uploadFile) {
+      setUploadMessage("Pilih file rekap terlebih dahulu.");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("file", uploadFile);
+      formData.set("category", uploadCategory);
+      formData.set("year", String(uploadYear));
+      formData.set("unit", uploadUnit);
+      formData.set("indicator", uploadIndicator);
+      formData.set("source", uploadSource);
+
+      const response = await fetch("/api/dashboard/import", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as ImportResponse;
+
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error ?? "Upload gagal diproses.");
+      }
+
+      onImport(payload.rows, payload.indicator);
+      setUploadMessage(
+        `Berhasil membaca ${payload.meta?.records ?? payload.rows.length} baris dari ${uploadFile.name}. Klik Simpan ke API agar permanen.`,
+      );
+      setUploadFile(null);
+    } catch (error) {
+      setUploadMessage(
+        error instanceof Error ? error.message : "Upload gagal diproses.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div>
           <CardTitle>Manajemen Data Tabel</CardTitle>
           <CardDescription>
-            Draft data ini menjadi sumber filter, tabel, dan ekspor dashboard.
+            Data dikelompokkan per kategori dan bisa diperbarui lewat upload
+            DOCX, PDF, Excel, atau CSV.
           </CardDescription>
         </div>
         <Button onClick={onAdd}>
@@ -875,48 +1313,510 @@ function RowsPanel({
           Tambah
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        {rows.map((row) => (
+      <CardContent className="grid gap-5">
+        <form
+          onSubmit={handleUpload}
+          className="rounded-lg border border-emerald-200/80 bg-emerald-50/70 p-4 shadow-sm backdrop-blur-xl"
+        >
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                Upload Rekap Data
+              </p>
+              <h3 className="text-lg font-bold text-slate-950">
+                Tambahkan data kategori dari dokumen
+              </h3>
+            </div>
+            <Badge variant="success">
+              <FileUp className="mr-1 h-3.5 w-3.5" />
+              DOCX/PDF/XLSX/XLS/CSV
+            </Badge>
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-[0.8fr_0.52fr_0.36fr_0.36fr]">
+            <Select
+              label="Kategori tujuan"
+              value={uploadCategory}
+              options={categoryOptions}
+              onChange={(value) => {
+                setUploadCategory(value);
+                if (value === "IPS") {
+                  setUploadUnit("indeks");
+                  setUploadIndicator("Nilai Indeks Pembangunan Statistik");
+                  setUploadSource("Rekap IPS Kanwil Kemenag Lampung");
+                }
+              }}
+            />
+            <InputField
+              label="Nama indikator"
+              value={uploadIndicator}
+              onChange={setUploadIndicator}
+            />
+            <InputField
+              label="Tahun Data"
+              type="number"
+              value={uploadYear}
+              onChange={(value) => {
+                const parsedYear = Number(value);
+                setUploadYear(Number.isFinite(parsedYear) ? parsedYear : 2025);
+              }}
+            />
+            <InputField
+              label="Satuan"
+              value={uploadUnit}
+              onChange={setUploadUnit}
+            />
+          </div>
+          <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
+            <InputField
+              label="Sumber data"
+              value={uploadSource}
+              onChange={setUploadSource}
+            />
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              File rekap
+              <input
+                type="file"
+                accept=".docx,.doc,.pdf,.xlsx,.xls,.csv"
+                onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+                className="h-11 rounded-md border border-white/70 bg-white/70 px-3 text-sm shadow-sm backdrop-blur-xl file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+              />
+            </label>
+            <Button type="submit" disabled={isUploading}>
+              {isUploading ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Proses Upload
+            </Button>
+          </div>
+          {uploadMessage ? (
+            <p className="mt-3 rounded-md border border-white/70 bg-white/60 px-3 py-2 text-sm font-medium text-slate-700">
+              {uploadMessage}
+            </p>
+          ) : null}
+        </form>
+
+        {groupedRows.map(([categoryName, items]) => (
           <div
-            key={row.id}
-            className="grid gap-3 rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl xl:grid-cols-[1.2fr_0.8fr_0.8fr_0.6fr_0.55fr_auto]"
+            key={categoryName}
+            className="rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl"
+          >
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                  {categoryName}
+                </p>
+                <h3 className="text-lg font-bold text-slate-950">
+                  {items.length} baris data
+                </h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">
+                  <Layers className="mr-1 h-3.5 w-3.5" />
+                  {new Set(items.map((row) => row.region)).size} wilayah
+                </Badge>
+                <Badge variant="outline">
+                  {Math.max(...items.map((row) => row.year))}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {items.map((row) => (
+                <div
+                  key={row.id}
+                  className="grid gap-3 rounded-md border border-white/70 bg-white/55 p-3 xl:grid-cols-[1.05fr_0.54fr_0.62fr_0.34fr_0.34fr_auto]"
+                >
+                  <InputField
+                    label="Indikator"
+                    value={row.indicator}
+                    onChange={(value) => onUpdate(row.id, { indicator: value })}
+                  />
+                  <Select
+                    label="Kategori"
+                    value={row.category}
+                    options={categoryOptions}
+                    onChange={(value) => onUpdate(row.id, { category: value })}
+                  />
+                  <Select
+                    label="Wilayah"
+                    value={row.region}
+                    options={regions.map((item) => ({ label: item, value: item }))}
+                    onChange={(value) => onUpdate(row.id, { region: value })}
+                  />
+                  <InputField
+                    label="Tahun"
+                    type="number"
+                    value={row.year}
+                    onChange={(value) => onUpdate(row.id, { year: Number(value) })}
+                  />
+                  <InputField
+                    label="Nilai"
+                    type="number"
+                    value={row.value}
+                    onChange={(value) => onUpdate(row.id, { value: Number(value) })}
+                  />
+                  <div className="flex items-end justify-end">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => onDelete(row.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <InputField
+                    className="xl:col-span-2"
+                    label="Sumber"
+                    value={row.source}
+                    onChange={(value) => onUpdate(row.id, { source: value })}
+                  />
+                  <InputField
+                    label="Periode"
+                    value={row.period}
+                    onChange={(value) => onUpdate(row.id, { period: value })}
+                  />
+                  <InputField
+                    label="Satuan"
+                    value={row.unit}
+                    onChange={(value) => onUpdate(row.id, { unit: value })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CatalogPanel({
+  datasets,
+  releaseSchedules,
+  onAddDataset,
+  onAddReleaseSchedule,
+  onDeleteDataset,
+  onDeleteReleaseSchedule,
+  onUpdateDataset,
+  onUpdateReleaseSchedule,
+}: {
+  datasets: DataCatalog[];
+  releaseSchedules: ReleaseSchedule[];
+  onAddDataset: () => void;
+  onAddReleaseSchedule: () => void;
+  onDeleteDataset: (id: number) => void;
+  onDeleteReleaseSchedule: (id: number) => void;
+  onUpdateDataset: (id: number, patch: Partial<DataCatalog>) => void;
+  onUpdateReleaseSchedule: (id: number, patch: Partial<ReleaseSchedule>) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Katalog Dataset</CardTitle>
+            <CardDescription>
+              Kelola daftar dataset publik, tautan unduh Excel/PDF, Standar Data, dan
+              metadata seperti portal Satu Data.
+            </CardDescription>
+          </div>
+          <Button onClick={onAddDataset}>
+            <Plus className="h-4 w-4" />
+            Tambah Dataset
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {datasets.map((dataset) => (
+            <div
+              key={dataset.id}
+              className="grid gap-3 rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                    {dataset.category}
+                  </p>
+                  <h3 className="text-lg font-bold text-slate-950">{dataset.title}</h3>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => onDeleteDataset(dataset.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-[1.15fr_0.42fr_0.34fr_0.48fr]">
+                <InputField
+                  label="Judul dataset"
+                  value={dataset.title}
+                  onChange={(value) => onUpdateDataset(dataset.id, { title: value })}
+                />
+                <InputField
+                  label="Kategori"
+                  value={dataset.category}
+                  onChange={(value) => onUpdateDataset(dataset.id, { category: value })}
+                />
+                <InputField
+                  label="Tahun Data"
+                  type="number"
+                  value={dataset.year}
+                  onChange={(value) => {
+                    const parsedYear = Number(value);
+                    onUpdateDataset(dataset.id, {
+                      year: Number.isFinite(parsedYear) ? parsedYear : dataset.year,
+                    });
+                  }}
+                />
+                <InputField
+                  label="Format"
+                  value={dataset.format}
+                  onChange={(value) => onUpdateDataset(dataset.id, { format: value })}
+                />
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-3">
+                <InputField
+                  label="Produsen data"
+                  value={dataset.producer}
+                  onChange={(value) => onUpdateDataset(dataset.id, { producer: value })}
+                />
+                <InputField
+                  label="Frekuensi pembaruan"
+                  value={dataset.frequency}
+                  onChange={(value) => onUpdateDataset(dataset.id, { frequency: value })}
+                />
+                <InputField
+                  label="URL sumber/tautan resmi"
+                  value={dataset.sourceUrl}
+                  onChange={(value) => onUpdateDataset(dataset.id, { sourceUrl: value })}
+                />
+              </div>
+
+              <TextAreaField
+                label="Deskripsi"
+                value={dataset.description}
+                onChange={(value) => onUpdateDataset(dataset.id, { description: value })}
+              />
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                <UrlUploadField
+                  label="File Excel/CSV"
+                  value={dataset.excelUrl}
+                  accept=".xlsx,.xls,.csv"
+                  onChange={(value) => onUpdateDataset(dataset.id, { excelUrl: value })}
+                />
+                <UrlUploadField
+                  label="File PDF/Dokumen"
+                  value={dataset.pdfUrl}
+                  accept=".pdf,.doc,.docx"
+                  onChange={(value) => onUpdateDataset(dataset.id, { pdfUrl: value })}
+                />
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                <TextAreaField
+                  label="Standar Data"
+                  value={dataset.standardData}
+                  onChange={(value) =>
+                    onUpdateDataset(dataset.id, { standardData: value })
+                  }
+                />
+                <TextAreaField
+                  label="Metadata"
+                  value={dataset.metadata}
+                  onChange={(value) => onUpdateDataset(dataset.id, { metadata: value })}
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Jadwal Rilis</CardTitle>
+            <CardDescription>
+              Atur daftar jadwal dan realisasi publikasi data untuk halaman publik.
+            </CardDescription>
+          </div>
+          <Button onClick={onAddReleaseSchedule}>
+            <Plus className="h-4 w-4" />
+            Tambah Rilis
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {releaseSchedules.map((release) => (
+            <div
+              key={release.id}
+              className="grid gap-3 rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl xl:grid-cols-[1.25fr_0.36fr_0.42fr_0.42fr_0.36fr_auto]"
+            >
+              <InputField
+                label="Judul"
+                value={release.title}
+                onChange={(value) => onUpdateReleaseSchedule(release.id, { title: value })}
+              />
+              <InputField
+                label="Periode"
+                value={release.period}
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, { period: value })
+                }
+              />
+              <InputField
+                label="Jadwal"
+                value={release.scheduledDate}
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, { scheduledDate: value })
+                }
+              />
+              <InputField
+                label="Realisasi"
+                value={release.realizedDate}
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, { realizedDate: value })
+                }
+              />
+              <Select
+                label="Status"
+                value={release.status}
+                options={[
+                  { label: "Rencana", value: "rencana" },
+                  { label: "Rilis", value: "rilis" },
+                ]}
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, {
+                    status: value as ReleaseSchedule["status"],
+                  })
+                }
+              />
+              <div className="flex items-end justify-end">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => onDeleteReleaseSchedule(release.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <InputField
+                label="Bahasa"
+                value={release.language}
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, { language: value })
+                }
+              />
+              <InputField
+                label="Format"
+                value={release.format}
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, { format: value })
+                }
+              />
+              <UrlUploadField
+                className="xl:col-span-4"
+                label="Dokumen rilis"
+                value={release.documentUrl}
+                accept=".pdf,.doc,.docx,.xlsx,.xls,.csv"
+                onChange={(value) =>
+                  onUpdateReleaseSchedule(release.id, { documentUrl: value })
+                }
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function GeotaggingAdminPanel({
+  offices,
+  onAdd,
+  onDelete,
+  onUpdate,
+}: {
+  offices: OfficeLocation[];
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+  onUpdate: (id: number, patch: Partial<OfficeLocation>) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle>Geotagging Kantor Kemenag Lampung</CardTitle>
+          <CardDescription>
+            Kelola alamat, koordinat, dan tautan Google Maps untuk Kanwil dan 15
+            kabupaten/kota.
+          </CardDescription>
+        </div>
+        <Button onClick={onAdd}>
+          <Plus className="h-4 w-4" />
+          Tambah Alamat
+        </Button>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {offices.map((office) => (
+          <div
+            key={office.id}
+            className="grid gap-3 rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl xl:grid-cols-[1fr_0.42fr_0.38fr_0.38fr_auto]"
           >
             <InputField
-              label="Indikator"
-              value={row.indicator}
-              onChange={(value) => onUpdate(row.id, { indicator: value })}
+              label="Nama kantor"
+              value={office.name}
+              onChange={(value) => onUpdate(office.id, { name: value })}
             />
             <Select
-              label="Kategori"
-              value={row.category}
-              options={categories
-                .filter((item) => item !== "Semua Kategori")
-                .map((item) => ({ label: item, value: item }))}
-              onChange={(value) => onUpdate(row.id, { category: value })}
-            />
-            <Select
-              label="Wilayah"
-              value={row.region}
-              options={regions.map((item) => ({ label: item, value: item }))}
-              onChange={(value) => onUpdate(row.id, { region: value })}
+              label="Jenis"
+              value={office.type}
+              options={[
+                { label: "Kanwil", value: "kanwil" },
+                { label: "Kab/Kota", value: "kabupaten-kota" },
+              ]}
+              onChange={(value) =>
+                onUpdate(office.id, { type: value as OfficeLocation["type"] })
+              }
             />
             <InputField
-              label="Tahun"
+              label="Latitude"
               type="number"
-              value={row.year}
-              onChange={(value) => onUpdate(row.id, { year: Number(value) })}
+              value={office.latitude}
+              onChange={(value) => onUpdate(office.id, { latitude: Number(value) })}
             />
             <InputField
-              label="Nilai"
+              label="Longitude"
               type="number"
-              value={row.value}
-              onChange={(value) => onUpdate(row.id, { value: Number(value) })}
+              value={office.longitude}
+              onChange={(value) => onUpdate(office.id, { longitude: Number(value) })}
             />
             <div className="flex items-end justify-end">
-              <Button variant="outline" size="icon" onClick={() => onDelete(row.id)}>
+              <Button variant="outline" size="icon" onClick={() => onDelete(office.id)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
+            <TextAreaField
+              className="xl:col-span-2"
+              label="Alamat"
+              value={office.address}
+              onChange={(value) => onUpdate(office.id, { address: value })}
+            />
+            <InputField
+              label="Telepon"
+              value={office.phone}
+              onChange={(value) => onUpdate(office.id, { phone: value })}
+            />
+            <InputField
+              className="xl:col-span-2"
+              label="URL Google Maps"
+              value={office.mapsUrl}
+              onChange={(value) => onUpdate(office.id, { mapsUrl: value })}
+            />
           </div>
         ))}
       </CardContent>
@@ -1012,7 +1912,9 @@ function ContentPanel({
       <Card>
         <CardHeader>
           <CardTitle>Video Informasi</CardTitle>
-          <CardDescription>Perbarui embed YouTube dan narasi video prioritas.</CardDescription>
+          <CardDescription>
+            Perbarui URL YouTube atau embed dan narasi video prioritas.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
           {videos.map((video) => (
@@ -1026,7 +1928,7 @@ function ContentPanel({
                 onChange={(value) => onUpdateVideo(video.id, { title: value })}
               />
               <InputField
-                label="URL embed"
+                label="URL YouTube / embed"
                 value={video.embedUrl}
                 onChange={(value) => onUpdateVideo(video.id, { embedUrl: value })}
               />
@@ -1269,6 +2171,87 @@ function StatusRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function UrlUploadField({
+  label,
+  value,
+  onChange,
+  accept,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  accept: string;
+  className?: string;
+}) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setMessage("");
+
+    if (!file) {
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+
+      const response = await fetch("/api/dashboard/files", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as { url?: string; error?: string };
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error ?? "Upload file gagal.");
+      }
+
+      onChange(payload.url);
+      setMessage(`File tersimpan: ${payload.url}`);
+      event.target.value = "";
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload file gagal.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  return (
+    <div className={`grid gap-2 text-sm font-medium text-slate-700 ${className ?? ""}`}>
+      <span>{label}</span>
+      <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="/uploads/datasets/nama-file.pdf"
+          className="h-11 rounded-md border border-white/70 bg-white/60 px-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-xl transition hover:bg-white/75 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
+        />
+        <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-white/70 bg-white/70 px-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-white">
+          {isUploading ? (
+            <RefreshCw className="h-4 w-4 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4" />
+          )}
+          Upload
+          <input
+            type="file"
+            accept={accept}
+            disabled={isUploading}
+            onChange={handleUpload}
+            className="sr-only"
+          />
+        </label>
+      </div>
+      {message ? <span className="text-xs text-muted-foreground">{message}</span> : null}
+    </div>
+  );
+}
+
 function InputField({
   label,
   value,
@@ -1316,6 +2299,88 @@ function TextAreaField({
         className="rounded-md border border-white/70 bg-white/60 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-xl transition hover:bg-white/75 focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
       />
     </label>
+  );
+}
+
+function normalizeCategoryOptions(categories: string[]) {
+  return uniqueValues([
+    ...baseCategories,
+    ...categories.filter((item) => item !== "Semua Kategori"),
+  ]).map((item) => ({ label: item, value: item }));
+}
+
+function groupByCategory<T extends { category: string }>(items: T[]) {
+  const grouped = new Map<string, T[]>();
+
+  for (const item of items) {
+    grouped.set(item.category, [...(grouped.get(item.category) ?? []), item]);
+  }
+
+  return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
+}
+
+function buildDashboardFilters(
+  existing: DashboardData["filters"],
+  indicators: Indicator[],
+  rows: DashboardRow[],
+) {
+  const years = uniqueValues([
+    ...rows.map((row) => String(row.year)),
+    ...indicators.map((indicator) => String(indicator.year)),
+    ...existing.years.filter((year) => year !== "Semua Tahun"),
+  ]).sort((a, b) => Number(b) - Number(a));
+  const categories = uniqueValues([
+    ...baseCategories,
+    ...existing.categories.filter((category) => category !== "Semua Kategori"),
+    ...indicators.map((indicator) => indicator.category),
+    ...rows.map((row) => row.category),
+  ]);
+  const regions = uniqueValues([
+    ...lampungRegions,
+    ...existing.regions.filter((region) => region !== "Semua Wilayah"),
+    ...rows.map((row) => row.region),
+  ]);
+
+  return {
+    years: ["Semua Tahun", ...years],
+    categories: ["Semua Kategori", ...categories],
+    regions: ["Semua Wilayah", ...regions],
+  };
+}
+
+function buildChartSeriesFromRows(
+  rows: DashboardRow[],
+  categories: string[],
+): DashboardData["chartSeries"] {
+  const dataCategories = categories.filter((category) => category !== "Semua Kategori");
+  const years = uniqueValues(rows.map((row) => String(row.year)))
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  return years.map((year) => {
+    const point = { year } as DashboardData["chartSeries"][number];
+
+    for (const category of dataCategories) {
+      const categoryRows = rows.filter(
+        (row) => row.year === year && row.category === category,
+      );
+      point[category] = categoryRows.length
+        ? Number(
+            (
+              categoryRows.reduce((sum, row) => sum + row.value, 0) /
+              categoryRows.length
+            ).toFixed(3),
+          )
+        : 0;
+    }
+
+    return point;
+  });
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
   );
 }
 

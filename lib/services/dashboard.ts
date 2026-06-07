@@ -1,4 +1,7 @@
 import { asc } from "drizzle-orm";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import * as XLSX from "xlsx";
 
 import { db } from "@/lib/db/client";
 import { ensureDatabaseReady } from "@/lib/db/migrate";
@@ -8,14 +11,125 @@ import {
   awardItems as awardItemsTable,
   chartSeries as chartSeriesTable,
   contactInfo as contactInfoTable,
+  datasets as datasetsTable,
   dashboardRows as dashboardRowsTable,
   executiveSchedules as executiveSchedulesTable,
   filters as filtersTable,
   indicators as indicatorsTable,
+  officeLocations as officeLocationsTable,
   publications as publicationsTable,
+  releaseSchedules as releaseSchedulesTable,
   videos as videosTable,
 } from "@/lib/db/schema";
-import type { ChartPoint, DashboardData, DashboardRow } from "@/lib/types";
+import type {
+  ChartPoint,
+  DataCatalog,
+  DashboardData,
+  DashboardRow,
+  DatasetDetail,
+  ExecutiveSchedule,
+  NewsItem,
+  OfficeLocation,
+  ReleaseSchedule,
+} from "@/lib/types";
+
+const simandaAgendaUrl =
+  "https://datalampung.kemenag.go.id/simanda/home/agenda/show-all?sifat_agenda=publik";
+const lampungHomeApiUrl = "https://lampung.kemenag.go.id/api/home";
+const lampungNewsBaseUrl = "https://lampung.kemenag.go.id/berita";
+const lampungNewsImageBaseUrl = "https://lampung.kemenag.go.id/storage/berita";
+const agendaTimeZone = "Asia/Jakarta";
+const simandaAgendaCacheTtlMs = 5 * 60 * 1000;
+const lampungNewsCacheTtlMs = 10 * 60 * 1000;
+
+let simandaAgendaCache:
+  | {
+      checkedAt: number;
+      signature: string;
+      schedules: ExecutiveSchedule[];
+    }
+  | null = null;
+
+let lampungNewsCache:
+  | {
+      checkedAt: number;
+      news: NewsItem[];
+    }
+  | null = null;
+
+let datasetDetailsCache:
+  | {
+      signature: string;
+      details: DatasetDetail[];
+    }
+  | null = null;
+
+export function clearDashboardDataCache() {
+  simandaAgendaCache = null;
+  lampungNewsCache = null;
+  datasetDetailsCache = null;
+}
+
+type SimandaAgenda = {
+  id: number;
+  nama_agenda?: string | null;
+  tanggal_agenda?: string | null;
+  jam_mulai?: string | null;
+  jam_selesai?: string | null;
+  tempat_agenda?: string | null;
+  kehadiran_text?: string | null;
+  is_done?: number | boolean | null;
+  jabatans?: { nama_jabatan?: string | null }[] | null;
+};
+
+type LampungNewsResponse = {
+  headlines?: LampungNewsItem[] | null;
+};
+
+type LampungNewsItem = {
+  id?: number | null;
+  title?: string | null;
+  image?: string | null;
+  slug?: string | null;
+  posted_at?: string | null;
+  name?: string | null;
+};
+
+const lampungKabupatenKota = [
+  "Lampung Barat",
+  "Tanggamus",
+  "Lampung Selatan",
+  "Lampung Timur",
+  "Lampung Tengah",
+  "Lampung Utara",
+  "Way Kanan",
+  "Tulang Bawang",
+  "Pesawaran",
+  "Pringsewu",
+  "Mesuji",
+  "Tulang Bawang Barat",
+  "Pesisir Barat",
+  "Bandar Lampung",
+  "Metro",
+];
+
+const ipsRows: DashboardRow[] = [
+  { id: 101, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Lampung Barat", period: "Tahunan", year: 2025, value: 3.57, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 102, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Tanggamus", period: "Tahunan", year: 2025, value: 2.9, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 103, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Lampung Selatan", period: "Tahunan", year: 2025, value: 2.8, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 104, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Lampung Timur", period: "Tahunan", year: 2025, value: 2.878, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 105, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Lampung Tengah", period: "Tahunan", year: 2025, value: 2.825, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 106, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Lampung Utara", period: "Tahunan", year: 2025, value: 3, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 107, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Way Kanan", period: "Tahunan", year: 2025, value: 4.34, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 108, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Tulang Bawang", period: "Tahunan", year: 2025, value: 2.95, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 109, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Pesawaran", period: "Tahunan", year: 2025, value: 2.825, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 110, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Pringsewu", period: "Tahunan", year: 2025, value: 2.963, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 111, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Mesuji", period: "Tahunan", year: 2025, value: 2.825, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 112, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Tulang Bawang Barat", period: "Tahunan", year: 2025, value: 3.97, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 113, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Pesisir Barat", period: "Tahunan", year: 2025, value: 2.825, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 114, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Bandar Lampung", period: "Tahunan", year: 2025, value: 3, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+  { id: 115, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Metro", period: "Tahunan", year: 2025, value: 2.825, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
+];
 
 const rows: DashboardRow[] = [
   { id: 1, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Bandar Lampung", period: "Triwulan", year: 2026, value: 96.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
@@ -34,6 +148,171 @@ const rows: DashboardRow[] = [
   { id: 14, indicator: "Madrasah terakreditasi A/B", category: "Pendidikan Madrasah", region: "Metro", period: "Tahunan", year: 2023, value: 79.9, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 15, indicator: "KUA dengan layanan digital aktif", category: "Bimas Islam", region: "Pesawaran", period: "Tahunan", year: 2023, value: 72.8, unit: "persen", source: "Bidang Bimas Islam" },
   { id: 16, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2023, value: 80.1, unit: "persen", source: "Bidang Ortala" },
+  ...ipsRows,
+];
+
+const datasetCatalogs: DataCatalog[] = [
+  {
+    id: 1,
+    title: "Tata Kelola dan Manajemen Kanwil Kemenag Lampung 2026",
+    description:
+      "Dataset ringkasan tata kelola, manajemen organisasi, layanan administrasi, dan indikator pendukung Kanwil Kemenag Provinsi Lampung.",
+    category: "Tata Kelola dan Manajemen",
+    year: 2026,
+    producer: "Kanwil Kemenag Provinsi Lampung",
+    frequency: "Tahunan",
+    format: "XLSX",
+    sourceUrl: "https://datalampung.kemenag.go.id/index.php",
+    excelUrl: "/uploads/datasets/tata-kelola-manajemen-2026.xlsx",
+    pdfUrl: "",
+    standardData:
+      "Kolom wilayah berisi satuan kerja atau kabupaten/kota. Kolom indikator berisi nama ukuran statistik sektoral. Kolom nilai berisi angka mutlak atau indeks sesuai satuan data.",
+    metadata:
+      "Sumber: Kanwil Kemenag Provinsi Lampung; Cakupan: Provinsi Lampung; Referensi waktu: 2026; Klasifikasi isian: wajib; Dapat diakses publik: ya.",
+  },
+  {
+    id: 2,
+    title: "Pelayanan Keagamaan Provinsi Lampung 2026",
+    description:
+      "Dataset pelayanan keagamaan yang mencakup layanan KUA, bimbingan masyarakat, dan layanan keagamaan lintas kabupaten/kota.",
+    category: "Pelayanan Keagamaan",
+    year: 2026,
+    producer: "Bidang Bimas Islam Kanwil Kemenag Lampung",
+    frequency: "Tahunan",
+    format: "XLSX",
+    sourceUrl: "https://datalampung.kemenag.go.id/index.php",
+    excelUrl: "/uploads/datasets/pelayanan-keagamaan-2026.xlsx",
+    pdfUrl: "",
+    standardData:
+      "Data disajikan menurut wilayah, layanan, periode, dan nilai layanan. Isian numerik memakai angka mutlak atau persentase sesuai indikator.",
+    metadata:
+      "Sumber: Bidang Bimas Islam; Cakupan: 15 kabupaten/kota dan Kanwil; Frekuensi penerbitan: tahunan; Tipe data: numerik dan teks.",
+  },
+  {
+    id: 3,
+    title: "Pendidikan Agama Islam Provinsi Lampung 2026",
+    description:
+      "Dataset pendidikan agama Islam dan madrasah yang disiapkan untuk ringkasan statistik serta kebutuhan monitoring pimpinan.",
+    category: "Pendidikan Agama Islam",
+    year: 2026,
+    producer: "Bidang Pendidikan Madrasah Kanwil Kemenag Lampung",
+    frequency: "Tahunan",
+    format: "XLSX",
+    sourceUrl: "https://datalampung.kemenag.go.id/index.php",
+    excelUrl: "/uploads/datasets/pendidikan-agama-islam-2026.xlsx",
+    pdfUrl: "",
+    standardData:
+      "Kolom satuan pendidikan, status, wilayah, jenis layanan, tahun, dan nilai mengikuti format statistik sektoral Kementerian Agama.",
+    metadata:
+      "Sumber: Bidang Pendidikan Madrasah; Produsen data: Kanwil Kemenag Lampung; Cakupan: Provinsi Lampung; Referensi waktu: 2026.",
+  },
+  {
+    id: 4,
+    title:
+      "Jumlah Mahasiswa Penerima Kartu Indonesia Pintar (KIP) Kuliah pada PTKB menurut Status Lembaga dan Jenis Kelamin 2025",
+    description:
+      "Contoh dataset Satu Data berisi jumlah mahasiswa penerima KIP Kuliah pada Perguruan Tinggi Keagamaan Buddha menurut status lembaga dan jenis kelamin.",
+    category: "Dataset Referensi",
+    year: 2025,
+    producer: "Direktorat Jenderal Bimbingan Masyarakat Buddha",
+    frequency: "Tahunan",
+    format: "XLSX, PDF",
+    sourceUrl: "https://satudata.kemenag.go.id",
+    excelUrl: "/uploads/datasets/kip-kuliah-ptkb-2025.xlsx",
+    pdfUrl: "/uploads/datasets/kip-kuliah-ptkb-2025.pdf",
+    standardData:
+      "Kolom provinsi berisi nama provinsi di Indonesia. Kolom status lembaga membedakan Negeri dan Swasta. Kolom jenis kelamin membedakan laki-laki dan perempuan. Kolom tahun berisi tahun data diterbitkan.",
+    metadata:
+      "Sumber: Direktorat Jenderal Bimbingan Masyarakat Buddha; Pembaruan: tahunan; Tipe data: integer; Aturan validasi: nilai lebih besar atau sama dengan 0.",
+  },
+  {
+    id: 5,
+    title: "Indeks Pembangunan Statistik (IPS) Kabupaten/Kota Provinsi Lampung 2025",
+    description:
+      "Rekap nilai IPS 15 kabupaten/kota untuk memantau kematangan statistik sektoral di lingkungan Kanwil Kemenag Provinsi Lampung.",
+    category: "IPS",
+    year: 2025,
+    producer: "Tim Data Kanwil Kemenag Lampung",
+    frequency: "Tahunan",
+    format: "XLSX",
+    sourceUrl: "https://datalampung.kemenag.go.id/index.php",
+    excelUrl: "/uploads/datasets/ips-2025.xlsx",
+    pdfUrl: "",
+    standardData:
+      "Kolom wilayah berisi 15 kabupaten/kota di Provinsi Lampung. Kolom nilai IPS memakai satuan indeks. Nilai dibaca sebagai tingkat kematangan pembangunan statistik.",
+    metadata:
+      "Sumber: Rekap IPS Kanwil Kemenag Lampung; Cakupan: 15 kabupaten/kota; Referensi waktu: 2025; Klasifikasi isian: wajib.",
+  },
+];
+
+const releaseScheduleSeed: ReleaseSchedule[] = [
+  {
+    id: 1,
+    title: "Buku Statistik Kemenag Provinsi Lampung 2026",
+    period: "2026",
+    language: "Indonesia",
+    scheduledDate: "01-06-2026",
+    realizedDate: "05-06-2026",
+    status: "rilis",
+    documentUrl: "https://online.fliphtml5.com/wxfax/uhop/",
+    format: "Flipbook",
+  },
+  {
+    id: 2,
+    title: "Kementerian Agama Dalam Angka - Data Lampung",
+    period: "2026",
+    language: "Indonesia",
+    scheduledDate: "01-06-2026",
+    realizedDate: "05-06-2026",
+    status: "rilis",
+    documentUrl: "https://datalampung.kemenag.go.id/index.php",
+    format: "Web",
+  },
+  {
+    id: 3,
+    title: "Rekap Indeks Pembangunan Statistik Kabupaten/Kota",
+    period: "2026",
+    language: "Indonesia",
+    scheduledDate: "05-06-2026",
+    realizedDate: "05-06-2026",
+    status: "rilis",
+    documentUrl: "",
+    format: "Dashboard",
+  },
+];
+
+const officeLocationSeed: OfficeLocation[] = [
+  {
+    id: 1,
+    name: "Kanwil Kementerian Agama Provinsi Lampung",
+    type: "kanwil",
+    address: "Jl. Cut Mutia No. 27, Teluk Betung Utara, Bandar Lampung",
+    phone: "0721-481533",
+    latitude: -5.4385,
+    longitude: 105.2667,
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Kanwil%20Kementerian%20Agama%20Provinsi%20Lampung",
+  },
+  ...lampungKabupatenKota.map((region, index) => ({
+    id: index + 2,
+    name: `Kantor Kementerian Agama ${region}`,
+    type: "kabupaten-kota" as const,
+    address: `${region}, Provinsi Lampung`,
+    phone: "-",
+    latitude:
+      [
+        -5.0358, -5.4947, -5.5623, -5.1132, -4.8008, -4.8362, -4.5536, -4.4458,
+        -5.3669, -5.3582, -4.0045, -4.5215, -5.1937, -5.3971, -5.1131,
+      ][index] ?? -5.3971,
+    longitude:
+      [
+        104.0557, 104.6236, 105.5474, 105.7056, 105.3131, 104.8896, 104.5275,
+        105.2506, 105.0991, 104.9744, 105.2219, 105.0886, 103.9398, 105.2668,
+        105.3067,
+      ][index] ?? 105.2668,
+    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      `Kantor Kementerian Agama ${region} Lampung`,
+    )}`,
+  })),
 ];
 
 export const seedDashboardData: DashboardData = {
@@ -45,7 +324,7 @@ export const seedDashboardData: DashboardData = {
         category: "Layanan Publik",
         unit: "persen",
         source: "PTSP Kanwil Kemenag Lampung",
-        year: 2026,
+        year: 2025,
         value: 96.4,
         trend: 4.3,
         status: "aktif",
@@ -86,12 +365,25 @@ export const seedDashboardData: DashboardData = {
         trend: 2.7,
         status: "perlu-validasi",
       },
+      {
+        id: 5,
+        name: "Indeks Pembangunan Statistik",
+        description:
+          "Rekap nilai IPS untuk 15 kabupaten/kota sebagai gambaran tingkat kematangan statistik sektoral.",
+        category: "IPS",
+        unit: "indeks",
+        source: "Rekap IPS Kanwil Kemenag Lampung",
+        year: 2026,
+        value: 3.1,
+        trend: 0.3,
+        status: "aktif",
+      },
     ],
     rows,
     chartSeries: [
-      { year: 2023, "Pendidikan Madrasah": 79.9, "Bimas Islam": 72.8, "SPAK": 80.1, "Layanan Publik": 87.4 },
-      { year: 2024, "Pendidikan Madrasah": 81.2, "Bimas Islam": 75.6, "SPAK": 82.3, "Layanan Publik": 92.4 },
-      { year: 2025, "Pendidikan Madrasah": 84.7, "Bimas Islam": 78.9, "SPAK": 86.5, "Layanan Publik": 92.1 },
+      { year: 2023, "Pendidikan Madrasah": 79.9, "Bimas Islam": 72.8, "SPAK": 80.1, "Layanan Publik": 87.4, IPS: 0 },
+      { year: 2024, "Pendidikan Madrasah": 81.2, "Bimas Islam": 75.6, "SPAK": 82.3, "Layanan Publik": 92.4, IPS: 0 },
+      { year: 2025, "Pendidikan Madrasah": 84.7, "Bimas Islam": 78.9, "SPAK": 86.5, "Layanan Publik": 92.1, IPS: 3.1 },
       { year: 2026, "Pendidikan Madrasah": 88.2, "Bimas Islam": 91.5, "SPAK": 94.8, "Layanan Publik": 96.4 },
     ],
     executiveSchedules: [
@@ -112,7 +404,7 @@ export const seedDashboardData: DashboardData = {
         title: "Rapat koordinasi validasi statistik keagamaan",
         unit: "Perencana, data sektoral, bidang teknis",
         location: "Aula Kanwil Kemenag Lampung",
-        priority: "koordinasi",
+        priority: "-",
         status: "terjadwal",
       },
       {
@@ -122,7 +414,7 @@ export const seedDashboardData: DashboardData = {
         title: "Monitoring layanan Kankemenag Kota Bandar Lampung",
         unit: "Tim Kanwil dan Kankemenag Kota Bandar Lampung",
         location: "Jalan P. Emir Moh. Noer No.81, Telukbetung Selatan",
-        priority: "monitoring",
+        priority: "-",
         status: "selesai",
       },
       {
@@ -151,22 +443,6 @@ export const seedDashboardData: DashboardData = {
             imageUrl: "/awards/capaian-kanwil.webp",
             alt: "Piagam penghargaan capaian Kanwil Kementerian Agama Provinsi Lampung",
           },
-          {
-            id: 2,
-            title: "Capaian Kanwil Lampung",
-            description: "Arsip visual penghargaan capaian kinerja Kanwil Lampung.",
-            year: 2026,
-            imageUrl: "/awards/capaian-kanwil.webp",
-            alt: "Dokumentasi penghargaan capaian Kanwil Lampung",
-          },
-          {
-            id: 3,
-            title: "Apresiasi Kinerja Kanwil",
-            description: "Koleksi sementara untuk tampilan frontend galeri penghargaan.",
-            year: 2026,
-            imageUrl: "/awards/capaian-kanwil.webp",
-            alt: "Koleksi penghargaan capaian Kanwil",
-          },
         ],
       },
       {
@@ -177,27 +453,27 @@ export const seedDashboardData: DashboardData = {
         items: [
           {
             id: 1,
-            title: "Penghargaan PPID Kanwil",
-            description: "Dokumentasi penerimaan penghargaan PPID Kanwil Kemenag Lampung.",
-            year: 2026,
-            imageUrl: "/awards/ppid.webp",
-            alt: "Penghargaan PPID Kanwil Kementerian Agama Provinsi Lampung",
+            title: "Kualifikasi Informatif",
+            description: "Sertifikat penghargaan PPID Kanwil Kemenag Provinsi Lampung.",
+            year: 2025,
+            imageUrl: "/awards/ppid-2025-1.jpeg",
+            alt: "Sertifikat penghargaan PPID Kanwil Kemenag Provinsi Lampung",
           },
           {
             id: 2,
-            title: "Apresiasi Keterbukaan Informasi",
-            description: "Koleksi penghargaan Pejabat Pengelola Informasi dan Dokumentasi.",
-            year: 2026,
-            imageUrl: "/awards/ppid.webp",
-            alt: "Apresiasi keterbukaan informasi PPID Kanwil Lampung",
+            title: "PPID Unit Berkinerja Terbaik",
+            description: "Piagam penghargaan PPID Unit Kanwil berkinerja terbaik.",
+            year: 2025,
+            imageUrl: "/awards/ppid-2025-2.jpeg",
+            alt: "Piagam penghargaan PPID Unit Kanwil Kemenag Lampung berkinerja terbaik",
           },
           {
             id: 3,
-            title: "Dokumentasi PPID",
-            description: "Koleksi sementara untuk tampilan frontend galeri PPID.",
-            year: 2026,
-            imageUrl: "/awards/ppid.webp",
-            alt: "Dokumentasi penghargaan PPID",
+            title: "Apresiasi Keterbukaan Informasi",
+            description: "Dokumentasi penghargaan keterbukaan informasi Kanwil Lampung.",
+            year: 2025,
+            imageUrl: "/awards/ppid-2025-3.jpeg",
+            alt: "Dokumentasi penghargaan keterbukaan informasi PPID Kanwil Lampung",
           },
         ],
       },
@@ -228,6 +504,10 @@ export const seedDashboardData: DashboardData = {
         fileLabel: "Web",
       },
     ],
+    datasets: datasetCatalogs,
+    datasetDetails: [],
+    releaseSchedules: releaseScheduleSeed,
+    officeLocations: officeLocationSeed,
     activities: [
       {
         id: 1,
@@ -256,6 +536,7 @@ export const seedDashboardData: DashboardData = {
         embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
       },
     ],
+    latestNews: [],
     contact: {
       institution: "Kanwil Kementerian Agama Provinsi Lampung",
       address: "Jl. Cut Mutia No. 27, Teluk Betung Utara, Bandar Lampung",
@@ -269,17 +550,10 @@ export const seedDashboardData: DashboardData = {
     },
     filters: {
       years: ["Semua Tahun", "2026", "2025", "2024", "2023"],
-      categories: ["Semua Kategori", "Pendidikan Madrasah", "Bimas Islam", "SPAK", "Layanan Publik"],
-      regions: ["Semua Wilayah", "Kanwil Lampung", "Bandar Lampung", "Metro", "Pringsewu", "Pesawaran", "Mesuji", "Tulang Bawang Barat", "Pesisir Barat", "Lampung Selatan", "Lampung Tengah"],
+      categories: ["Semua Kategori", "Pendidikan Madrasah", "Bimas Islam", "SPAK", "Layanan Publik", "IPS"],
+      regions: ["Semua Wilayah", "Kanwil Lampung", ...lampungKabupatenKota],
     },
 };
-
-const chartCategories: (keyof Omit<ChartPoint, "year">)[] = [
-  "Pendidikan Madrasah",
-  "Bimas Islam",
-  "SPAK",
-  "Layanan Publik",
-];
 
 let seedPromise: Promise<void> | null = null;
 
@@ -293,6 +567,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     rawAwardCollections,
     rawAwardItems,
     publications,
+    datasets,
+    releaseSchedules,
+    officeLocations,
     activities,
     videos,
     contactRows,
@@ -317,13 +594,21 @@ export async function getDashboardData(): Promise<DashboardData> {
       .from(awardItemsTable)
       .orderBy(asc(awardItemsTable.collectionId), asc(awardItemsTable.sortOrder)),
     db.select().from(publicationsTable).orderBy(asc(publicationsTable.id)),
+    db.select().from(datasetsTable).orderBy(asc(datasetsTable.id)),
+    db.select().from(releaseSchedulesTable).orderBy(asc(releaseSchedulesTable.id)),
+    db.select().from(officeLocationsTable).orderBy(asc(officeLocationsTable.id)),
     db.select().from(activitiesTable).orderBy(asc(activitiesTable.id)),
     db.select().from(videosTable).orderBy(asc(videosTable.id)),
     db.select().from(contactInfoTable).limit(1),
     db.select().from(filtersTable).orderBy(asc(filtersTable.sortOrder)),
   ]);
 
-  const chartSeries = toChartPoints(rawChartSeries);
+  const normalizedRows = normalizeDashboardRows(rows);
+  const chartSeries = mergeIpsChartSeries(toChartPoints(rawChartSeries), normalizedRows);
+  const normalizedVideos = videos.map((video) => ({
+    ...video,
+    embedUrl: normalizeYouTubeEmbedUrl(video.embedUrl),
+  }));
   const awardCollections = rawAwardCollections.map((collection) => ({
     id: collection.id,
     title: collection.title,
@@ -365,16 +650,25 @@ export async function getDashboardData(): Promise<DashboardData> {
         mapEmbedUrl: contactRows[0].mapEmbedUrl,
       }
     : seedDashboardData.contact;
+  const liveExecutiveSchedules = await getSimandaExecutiveSchedules(executiveSchedules);
+  const latestNews = await getLampungLatestNews();
+  const portalDatasets = getPortalDatasets(datasets);
+  const datasetDetails = getDatasetDetails(portalDatasets);
 
   return {
     indicators,
-    rows,
+    rows: normalizedRows,
     chartSeries,
-    executiveSchedules,
+    executiveSchedules: liveExecutiveSchedules,
     awardCollections,
     publications,
+    datasets: portalDatasets,
+    datasetDetails,
+    releaseSchedules,
+    officeLocations,
     activities,
-    videos,
+    videos: normalizedVideos,
+    latestNews,
     contact,
     filters: {
       years: filters.years.length ? filters.years : seedDashboardData.filters.years,
@@ -384,6 +678,597 @@ export async function getDashboardData(): Promise<DashboardData> {
       regions: filters.regions.length ? filters.regions : seedDashboardData.filters.regions,
     },
   };
+}
+
+const portalDatasetFallbacks = [
+  {
+    match: /tata\s*kelola|manajemen/i,
+    module: "Tata Kelola dan Manajemen",
+    excelUrl: "/uploads/datasets/tata-kelola-manajemen-2026.xlsx",
+    defaultYear: 2025,
+  },
+  {
+    match: /pelayanan|bimas|agama dan keagamaan/i,
+    module: "Pelayanan Keagamaan",
+    excelUrl: "/uploads/datasets/pelayanan-keagamaan-2026.xlsx",
+    defaultYear: 2025,
+  },
+  {
+    match: /pendidikan|madrasah/i,
+    module: "Pendidikan Agama Islam",
+    excelUrl: "/uploads/datasets/pendidikan-agama-islam-2026.xlsx",
+    defaultYear: 2025,
+  },
+  {
+    match: /ips|indeks pembangunan statistik/i,
+    module: "Indeks Pembangunan Statistik (IPS)",
+    excelUrl: "/uploads/datasets/ips-2025.xlsx",
+    defaultYear: 2025,
+  },
+];
+
+function getPortalDatasets(datasets: DataCatalog[]) {
+  const normalized = datasets
+    .map((dataset) => normalizePortalDataset(dataset))
+    .filter((dataset): dataset is DataCatalog => Boolean(dataset));
+  const existingModules = new Set(normalized.map((dataset) => datasetModule(dataset)));
+  const missingFallbacks = datasetCatalogs
+    .map((dataset) => normalizePortalDataset(dataset, true))
+    .filter((dataset): dataset is DataCatalog => Boolean(dataset))
+    .filter((dataset) => !existingModules.has(datasetModule(dataset)));
+
+  return [...normalized, ...missingFallbacks];
+}
+
+function normalizePortalDataset(dataset: DataCatalog, useFallbackYear = false) {
+  const haystack = `${dataset.title} ${dataset.category} ${dataset.producer}`;
+  if (/referensi|kip|buddha/i.test(haystack)) return null;
+
+  const fallback = portalDatasetFallbacks.find((item) => item.match.test(haystack));
+  if (!fallback) return null;
+
+  const excelUrl = hasPublicFile(dataset.excelUrl) ? dataset.excelUrl : fallback.excelUrl;
+  if (!hasPublicFile(excelUrl)) return null;
+  const dataYear = useFallbackYear
+    ? fallback.defaultYear
+    : normalizeDatasetYear(dataset.year, fallback.defaultYear);
+
+  return {
+    ...dataset,
+    title: normalizeDatasetTitleYear(dataset.title, dataYear),
+    category: fallback.module,
+    year: dataYear,
+    excelUrl,
+    metadata: (dataset.metadata || `Sumber: ${dataset.producer}. Referensi waktu: ${dataYear}.`).replace(
+      /Referensi waktu:\s*20\d{2}/i,
+      `Referensi waktu: ${dataYear}`,
+    ),
+  } satisfies DataCatalog;
+}
+
+function normalizeDatasetYear(year: number, fallbackYear: number) {
+  return Number.isFinite(year) && year >= 1900 && year <= 2200
+    ? Math.trunc(year)
+    : fallbackYear;
+}
+
+function normalizeDatasetTitleYear(title: string, year: number) {
+  return title.replace(/\b20\d{2}\b/g, String(year));
+}
+
+function hasPublicFile(publicPath: string) {
+  if (!publicPath) return false;
+  return existsSync(path.join(process.cwd(), "public", publicPath.replace(/^\//, "")));
+}
+
+function getDatasetDetails(datasets: DataCatalog[]): DatasetDetail[] {
+  const signature = datasets
+    .map((dataset) => {
+      const filePath = path.join(process.cwd(), "public", dataset.excelUrl.replace(/^\//, ""));
+      const fileStat = existsSync(filePath) ? statSync(filePath) : null;
+      const fileSignature = fileStat ? `${fileStat.mtimeMs}:${fileStat.size}` : "missing";
+
+      return `${dataset.id}:${dataset.title}:${dataset.category}:${dataset.year}:${dataset.excelUrl}:${fileSignature}`;
+    })
+    .join("|");
+
+  if (datasetDetailsCache?.signature === signature) {
+    return datasetDetailsCache.details;
+  }
+
+  const details = datasets.flatMap((dataset) => parseDatasetWorkbook(dataset));
+
+  datasetDetailsCache = {
+    signature,
+    details,
+  };
+
+  return details;
+}
+
+function parseDatasetWorkbook(dataset: DataCatalog): DatasetDetail[] {
+  if (!dataset.excelUrl) return [];
+
+  const filePath = path.join(process.cwd(), "public", dataset.excelUrl.replace(/^\//, ""));
+
+  if (!existsSync(filePath)) return [];
+
+  try {
+    const workbook = XLSX.read(readFileSync(filePath), {
+      cellDates: false,
+      type: "buffer",
+    });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<(string | number)[]>(worksheet, {
+      header: 1,
+      defval: "",
+      raw: true,
+    });
+    const titleIndexes = rows
+      .map((row, index) => ({
+        index,
+        title: String(firstFilledCell(row)).trim(),
+      }))
+      .filter((row) => /^Table\s+\d+/i.test(row.title));
+
+    return titleIndexes
+      .map((entry, entryIndex) => {
+        const endIndex = titleIndexes[entryIndex + 1]?.index ?? rows.length;
+        const tableRows = rows.slice(entry.index + 1, endIndex);
+        const headerOffset = tableRows.findIndex((row) => countFilledCells(row) > 1);
+
+        if (headerOffset < 0) return null;
+
+        const headers = trimTrailingEmptyCells(tableRows[headerOffset]).map((cell) =>
+          String(cell).trim(),
+        );
+        const bodyRows = tableRows
+          .slice(headerOffset + 1)
+          .map((row) => trimTrailingEmptyCells(row).slice(0, headers.length))
+          .filter((row) => countFilledCells(row) > 1);
+        const tableNumber = entry.title.match(/^Table\s+([^\s]+)/i)?.[1] ?? `${dataset.id}.${entryIndex + 1}`;
+        const cleanTitle = entry.title.replace(/^Table\s+[^\s]+\s*/i, "").trim();
+
+        return {
+          id: `${dataset.id}-${tableNumber.replaceAll(".", "-")}`,
+          datasetId: dataset.id,
+          tableNumber,
+          title: cleanTitle || entry.title,
+          module: datasetModule(dataset),
+          category: dataset.category,
+          year: detectYear(entry.title, dataset.year),
+          producer: dataset.producer,
+          description: `Data ${cleanTitle.toLowerCase()} disusun dari ${dataset.title}.`,
+          headers,
+          rows: bodyRows,
+          chartData: buildDatasetChartData(headers, bodyRows),
+          standardData: buildStandardDataDescription(headers, dataset),
+          metadata: buildDatasetMetadata(dataset, cleanTitle),
+        } satisfies DatasetDetail;
+      })
+      .filter((item): item is DatasetDetail => Boolean(item));
+  } catch (error) {
+    console.warn(`Failed to parse dataset workbook: ${dataset.excelUrl}`, error);
+
+    return [];
+  }
+}
+
+function datasetModule(dataset: DataCatalog) {
+  if (/ips|indeks pembangunan statistik/i.test(`${dataset.category} ${dataset.title}`)) {
+    return "Indeks Pembangunan Statistik (IPS)";
+  }
+  if (/tata kelola/i.test(dataset.category)) return "Tata Kelola";
+  if (/pelayanan/i.test(dataset.category)) return "Agama dan Keagamaan";
+  if (/pendidikan/i.test(dataset.category)) return "Pendidikan";
+  return dataset.category;
+}
+
+function buildDatasetChartData(headers: string[], rows: (string | number)[][]) {
+  const labelIndex = findHeaderIndex(headers, ["satuan kerja", "wilayah", "provinsi", "nama"]) ?? 1;
+  const totalIndex =
+    findHeaderIndex(headers, ["jumlah", "total"]) ??
+    headers
+      .map((_, index) => index)
+      .reverse()
+      .find((index) => rows.some((row) => toNumber(row[index]) !== null));
+
+  if (totalIndex === undefined) return [];
+
+  return rows
+    .map((row) => {
+      const label = String(row[labelIndex] ?? "").trim();
+      const value = toNumber(row[totalIndex]);
+
+      return {
+        label: shortRegionLabel(label || "Data"),
+        value: value ?? 0,
+      };
+    })
+    .filter((row) => row.label && row.value > 0)
+    .slice(0, 16);
+}
+
+function buildStandardDataDescription(headers: string[], dataset: DataCatalog) {
+  const columns = headers.filter(Boolean).slice(0, 8).join(", ");
+
+  return [
+    `Kolom utama dataset: ${columns}.`,
+    `Data mengikuti format ${dataset.format} dengan referensi waktu ${dataset.year}.`,
+    "Setiap baris memuat satuan kerja atau wilayah, indikator, dan nilai sesuai tabel sumber.",
+  ].join(";");
+}
+
+function buildDatasetMetadata(dataset: DataCatalog, title: string) {
+  return [
+    `Sumber: ${dataset.producer}.`,
+    `Judul tabel: ${title || dataset.title}.`,
+    `Cakupan: Provinsi Lampung dan satuan kerja kabupaten/kota.`,
+    `Frekuensi penerbitan: ${dataset.frequency}.`,
+    `Dapat diakses publik: Ya.`,
+  ].join(";");
+}
+
+function detectYear(_title: string, fallback: number) {
+  return fallback;
+}
+
+function findHeaderIndex(headers: string[], needles: string[]) {
+  const index = headers.findIndex((header) =>
+    needles.some((needle) => header.toLowerCase().includes(needle)),
+  );
+
+  return index >= 0 ? index : undefined;
+}
+
+function shortRegionLabel(label: string) {
+  return label
+    .replace(/^Kantor\s+Kemenag\s+(Kabupaten|Kota)\s+/i, "")
+    .replace(/^Kanwil\s+Kemenag\s+Provinsi\s+/i, "Kanwil ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstFilledCell(row: (string | number)[]) {
+  return row.find((cell) => String(cell).trim()) ?? "";
+}
+
+function countFilledCells(row: (string | number)[]) {
+  return row.filter((cell) => String(cell).trim() !== "").length;
+}
+
+function trimTrailingEmptyCells(row: (string | number)[]) {
+  const next = [...row];
+
+  while (next.length && String(next[next.length - 1]).trim() === "") {
+    next.pop();
+  }
+
+  return next;
+}
+
+function toNumber(value: string | number | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const normalized = String(value ?? "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getSimandaExecutiveSchedules(
+  fallbackSchedules: ExecutiveSchedule[],
+): Promise<ExecutiveSchedule[]> {
+  const now = Date.now();
+
+  if (simandaAgendaCache && now - simandaAgendaCache.checkedAt < simandaAgendaCacheTtlMs) {
+    return simandaAgendaCache.schedules;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(simandaAgendaUrl, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`SIMANDA agenda request failed: ${response.status}`);
+    }
+
+    const payload = (await response.json()) as unknown;
+    const simandaAgendas = Array.isArray(payload) ? (payload as SimandaAgenda[]) : [];
+    const signature = getSimandaAgendaSignature(simandaAgendas);
+
+    if (simandaAgendaCache?.signature === signature) {
+      simandaAgendaCache = {
+        ...simandaAgendaCache,
+        checkedAt: now,
+      };
+
+      return simandaAgendaCache.schedules;
+    }
+
+    const schedules = mapSimandaSchedules(simandaAgendas);
+
+    if (!schedules.length) {
+      return fallbackSchedules;
+    }
+
+    simandaAgendaCache = {
+      checkedAt: now,
+      signature,
+      schedules,
+    };
+
+    return schedules;
+  } catch {
+    return simandaAgendaCache?.schedules ?? fallbackSchedules;
+  }
+}
+
+async function getLampungLatestNews(): Promise<NewsItem[]> {
+  const now = Date.now();
+
+  if (lampungNewsCache && now - lampungNewsCache.checkedAt < lampungNewsCacheTtlMs) {
+    return lampungNewsCache.news;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(lampungHomeApiUrl, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`Lampung news API responded with ${response.status}`);
+    }
+
+    const payload = (await response.json()) as LampungNewsResponse;
+    const news = mapLampungNews(payload.headlines ?? []);
+
+    if (!news.length) {
+      throw new Error("Lampung news API returned no headlines");
+    }
+
+    lampungNewsCache = {
+      checkedAt: now,
+      news,
+    };
+
+    return news;
+  } catch (error) {
+    console.warn("Failed to fetch Lampung latest news, keeping fallback data.", error);
+
+    return lampungNewsCache?.news ?? [];
+  }
+}
+
+function mapLampungNews(items: LampungNewsItem[]): NewsItem[] {
+  return items
+    .filter((item) => item.id && item.title && item.slug && item.image)
+    .sort((a, b) => getNewsTimestamp(b.posted_at) - getNewsTimestamp(a.posted_at))
+    .slice(0, 5)
+    .map((item) => ({
+      id: Number(item.id),
+      title: normalizeText(item.title) || "Berita Kanwil Kemenag Lampung",
+      category: normalizeText(item.name) || "Berita",
+      date: formatNewsDate(item.posted_at),
+      imageUrl: buildLampungNewsImageUrl(item.image),
+      url: `${lampungNewsBaseUrl}/${item.slug}`,
+    }));
+}
+
+function buildLampungNewsImageUrl(image?: string | null) {
+  const normalizedImage = normalizeText(image);
+
+  if (!normalizedImage) return `${lampungNewsImageBaseUrl}/2026_06_03_060220_Berita.jpeg`;
+  if (normalizedImage.startsWith("http://") || normalizedImage.startsWith("https://")) {
+    return normalizedImage;
+  }
+
+  return `${lampungNewsImageBaseUrl}/${encodeURI(normalizedImage)}`;
+}
+
+function getNewsTimestamp(date?: string | null) {
+  if (!date) return 0;
+
+  const timestamp = new Date(date.replace(" ", "T")).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function formatNewsDate(date?: string | null) {
+  const timestamp = getNewsTimestamp(date);
+
+  if (!timestamp) return "Tanggal belum tersedia";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: agendaTimeZone,
+  }).format(new Date(timestamp));
+}
+
+function getSimandaAgendaSignature(agendas: SimandaAgenda[]) {
+  return JSON.stringify(
+    agendas.map((agenda) => ({
+      id: agenda.id,
+      nama_agenda: agenda.nama_agenda,
+      tanggal_agenda: agenda.tanggal_agenda,
+      jam_mulai: agenda.jam_mulai,
+      jam_selesai: agenda.jam_selesai,
+      tempat_agenda: agenda.tempat_agenda,
+      kehadiran_text: agenda.kehadiran_text,
+      is_done: agenda.is_done,
+      jabatans: agenda.jabatans?.map((jabatan) => jabatan.nama_jabatan) ?? [],
+    })),
+  );
+}
+
+function mapSimandaSchedules(agendas: SimandaAgenda[]): ExecutiveSchedule[] {
+  const validAgendas = agendas
+    .filter((agenda) => agenda.id && agenda.nama_agenda && agenda.tanggal_agenda)
+    .map((agenda) => ({
+      agenda,
+      startsAt: getAgendaTimestamp(agenda.tanggal_agenda, agenda.jam_mulai),
+      isDone: agenda.is_done === 1 || agenda.is_done === true,
+    }));
+  const now = new Date();
+  const upcoming = validAgendas
+    .filter((item) => !item.isDone && item.startsAt >= now.getTime())
+    .sort((a, b) => a.startsAt - b.startsAt);
+  const historical = validAgendas
+    .filter((item) => item.isDone || item.startsAt < now.getTime())
+    .sort((a, b) => b.startsAt - a.startsAt);
+  const selected = [...upcoming, ...historical].slice(0, 4);
+  const primaryAgendaId = upcoming[0]?.agenda.id ?? selected[0]?.agenda.id;
+
+  return selected.map(({ agenda }) => ({
+    id: agenda.id,
+    date: formatAgendaDate(agenda.tanggal_agenda),
+    time: formatAgendaTime(agenda.jam_mulai, agenda.jam_selesai),
+    title: normalizeText(agenda.nama_agenda) || "Agenda Pimpinan",
+    unit: formatAttendance(agenda),
+    location: normalizeText(agenda.tempat_agenda) || "Tempat belum ditentukan",
+    priority: agenda.id === primaryAgendaId ? "utama" : "-",
+    status: inferAgendaStatus(agenda),
+  }));
+}
+
+function inferAgendaStatus(agenda: SimandaAgenda): ExecutiveSchedule["status"] {
+  if (agenda.is_done === 1 || agenda.is_done === true) return "selesai";
+
+  const startsAt = getAgendaTimestamp(agenda.tanggal_agenda, agenda.jam_mulai);
+  const endsAt = getAgendaTimestamp(agenda.tanggal_agenda, agenda.jam_selesai);
+  const now = new Date().getTime();
+  const fallbackEndsAt = startsAt + 2 * 60 * 60 * 1000;
+
+  if (startsAt <= now && now <= (endsAt || fallbackEndsAt)) return "berjalan";
+
+  return "belum";
+}
+
+function formatAttendance(agenda: SimandaAgenda) {
+  const attendanceText = normalizeText(agenda.kehadiran_text);
+
+  if (attendanceText) return attendanceText;
+
+  const positions =
+    agenda.jabatans
+      ?.map((position) => normalizeText(position.nama_jabatan))
+      .filter(Boolean)
+      .join(", ") ?? "";
+
+  return positions ? `Hadir ${positions}` : "Kehadiran belum ditentukan";
+}
+
+function formatAgendaDate(date: SimandaAgenda["tanggal_agenda"]) {
+  const parsedDate = parseAgendaDate(date);
+
+  if (!parsedDate) return "Tanggal belum ditentukan";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: agendaTimeZone,
+  }).format(parsedDate);
+}
+
+function formatAgendaTime(
+  start: SimandaAgenda["jam_mulai"],
+  end: SimandaAgenda["jam_selesai"],
+) {
+  const formattedStart = formatClock(start);
+  const formattedEnd = formatClock(end);
+
+  if (formattedStart && formattedEnd) return `${formattedStart} - ${formattedEnd} WIB`;
+  if (formattedStart) return `${formattedStart} WIB`;
+
+  return "Jam belum ditentukan";
+}
+
+function getAgendaTimestamp(
+  date: SimandaAgenda["tanggal_agenda"],
+  time: SimandaAgenda["jam_mulai"],
+) {
+  const parsedDate = parseAgendaDate(date, time);
+
+  return parsedDate?.getTime() ?? 0;
+}
+
+function parseAgendaDate(
+  date: SimandaAgenda["tanggal_agenda"],
+  time: SimandaAgenda["jam_mulai"] = "00:00:00",
+) {
+  if (!date) return null;
+
+  const normalizedTime = time || "00:00:00";
+  const parsedDate = new Date(`${date}T${normalizedTime}+07:00`);
+
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+}
+
+function formatClock(time: SimandaAgenda["jam_mulai"]) {
+  if (!time) return "";
+
+  const [hours, minutes] = time.split(":");
+
+  if (!hours || !minutes) return "";
+
+  return `${hours.padStart(2, "0")}.${minutes.padStart(2, "0")}`;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function normalizeYouTubeEmbedUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.replace(/^www\./, "");
+    let videoId = "";
+
+    if (hostname === "youtu.be") {
+      videoId = parsedUrl.pathname.split("/").filter(Boolean)[0] ?? "";
+    }
+
+    if (hostname === "youtube.com" || hostname === "m.youtube.com") {
+      const [firstPath, secondPath] = parsedUrl.pathname.split("/").filter(Boolean);
+
+      if (firstPath === "watch") {
+        videoId = parsedUrl.searchParams.get("v") ?? "";
+      } else if (firstPath === "embed" || firstPath === "shorts" || firstPath === "live") {
+        videoId = secondPath ?? "";
+      }
+    }
+
+    if (!videoId) return url;
+
+    const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`);
+    const start = parsedUrl.searchParams.get("start") ?? parsedUrl.searchParams.get("t");
+
+    if (start) {
+      embedUrl.searchParams.set("start", start.replace(/s$/, ""));
+    }
+
+    return embedUrl.toString();
+  } catch {
+    return url;
+  }
 }
 
 export async function replaceDashboardData(data: DashboardData) {
@@ -401,11 +1286,121 @@ async function ensureDashboardSeeded() {
 
       if (!existing.length) {
         await insertDashboardData(seedDashboardData);
+      } else {
+        await ensureIpsDataPresent();
+        await ensureDataPortalPresent();
       }
     })();
   }
 
   return seedPromise;
+}
+
+async function ensureDataPortalPresent() {
+  const [existingDatasets, existingReleaseSchedules, existingOfficeLocations] =
+    await Promise.all([
+      db.select().from(datasetsTable),
+      db.select().from(releaseSchedulesTable),
+      db.select().from(officeLocationsTable),
+    ]);
+
+  if (!existingDatasets.length) {
+    await db.insert(datasetsTable).values(seedDashboardData.datasets);
+  }
+
+  if (!existingReleaseSchedules.length) {
+    await db.insert(releaseSchedulesTable).values(seedDashboardData.releaseSchedules);
+  }
+
+  if (!existingOfficeLocations.length) {
+    await db.insert(officeLocationsTable).values(seedDashboardData.officeLocations);
+  }
+}
+
+async function ensureIpsDataPresent() {
+  const existingRows = await db.select().from(dashboardRowsTable);
+  const hasIpsRows = existingRows.some((row) => row.category === "IPS");
+
+  if (!hasIpsRows) {
+    const maxRowId = existingRows.reduce((max, row) => Math.max(max, row.id), 0);
+    await db.insert(dashboardRowsTable).values(
+      ipsRows.map((row, index) => ({
+        ...row,
+        id: maxRowId + index + 1,
+      })),
+    );
+  }
+
+  const existingIndicators = await db.select().from(indicatorsTable);
+  const hasIpsIndicator = existingIndicators.some(
+    (indicator) => indicator.category === "IPS",
+  );
+
+  if (!hasIpsIndicator) {
+    const maxIndicatorId = existingIndicators.reduce(
+      (max, indicator) => Math.max(max, indicator.id),
+      0,
+    );
+
+    await db.insert(indicatorsTable).values({
+      id: maxIndicatorId + 1,
+      name: "Indeks Pembangunan Statistik",
+      description:
+        "Rekap nilai IPS untuk 15 kabupaten/kota sebagai gambaran tingkat kematangan statistik sektoral.",
+      category: "IPS",
+      unit: "indeks",
+      source: "Rekap IPS Kanwil Kemenag Lampung",
+      year: 2025,
+      value: 3.1,
+      trend: 0.3,
+      status: "aktif",
+    });
+  }
+
+  const existingChartSeries = await db.select().from(chartSeriesTable);
+  const hasIpsChart = existingChartSeries.some((item) => item.category === "IPS");
+
+  if (!hasIpsChart) {
+    await db.insert(chartSeriesTable).values({ year: 2025, category: "IPS", value: 3.1 });
+  }
+
+  const existingFilters = await db.select().from(filtersTable);
+  const hasIpsFilter = existingFilters.some(
+    (filter) => filter.kind === "category" && filter.value === "IPS",
+  );
+
+  if (!hasIpsFilter) {
+    const maxCategorySortOrder = existingFilters
+      .filter((filter) => filter.kind === "category")
+      .reduce((max, filter) => Math.max(max, filter.sortOrder), 100);
+    await db.insert(filtersTable).values({
+      kind: "category",
+      value: "IPS",
+      sortOrder: maxCategorySortOrder + 1,
+    });
+  }
+
+  const existingRegions = new Set(
+    existingFilters
+      .filter((filter) => filter.kind === "region")
+      .map((filter) => filter.value),
+  );
+  const missingRegions = lampungKabupatenKota.filter(
+    (region) => !existingRegions.has(region),
+  );
+
+  if (missingRegions.length) {
+    const maxRegionSortOrder = existingFilters
+      .filter((filter) => filter.kind === "region")
+      .reduce((max, filter) => Math.max(max, filter.sortOrder), 200);
+    await db.insert(filtersTable).values(
+      missingRegions.map((value, index) => ({
+        kind: "region" as const,
+        value,
+        sortOrder: maxRegionSortOrder + index + 1,
+      })),
+    );
+  }
 }
 
 async function clearDashboardTables() {
@@ -415,6 +1410,9 @@ async function clearDashboardTables() {
   await db.delete(contactInfoTable);
   await db.delete(videosTable);
   await db.delete(activitiesTable);
+  await db.delete(officeLocationsTable);
+  await db.delete(releaseSchedulesTable);
+  await db.delete(datasetsTable);
   await db.delete(publicationsTable);
   await db.delete(executiveSchedulesTable);
   await db.delete(chartSeriesTable);
@@ -423,19 +1421,35 @@ async function clearDashboardTables() {
 }
 
 async function insertDashboardData(data: DashboardData) {
-  if (data.indicators.length) {
-    await db.insert(indicatorsTable).values(data.indicators);
+  const indicators = data.indicators ?? [];
+  const rows = data.rows ?? [];
+  const chartSeries = data.chartSeries ?? [];
+  const executiveSchedules = data.executiveSchedules ?? [];
+  const awardCollections = data.awardCollections ?? [];
+  const publications = data.publications ?? [];
+  const datasets = data.datasets ?? [];
+  const releaseSchedules = data.releaseSchedules ?? [];
+  const officeLocations = data.officeLocations ?? [];
+  const activities = data.activities ?? [];
+  const videos = data.videos ?? [];
+  const contact = data.contact ?? seedDashboardData.contact;
+  const filters = data.filters ?? seedDashboardData.filters;
+
+  if (indicators.length) {
+    await db.insert(indicatorsTable).values(indicators);
   }
 
-  if (data.rows.length) {
-    await db.insert(dashboardRowsTable).values(data.rows);
+  if (rows.length) {
+    await db.insert(dashboardRowsTable).values(rows);
   }
 
-  const chartValues = data.chartSeries.flatMap((point) =>
-    chartCategories.map((category) => ({
+  const chartValues = chartSeries.flatMap((point) =>
+    Object.entries(point)
+      .filter(([category]) => category !== "year")
+      .map(([category, value]) => ({
       year: point.year,
       category,
-      value: point[category],
+      value: Number(value) || 0,
     })),
   );
 
@@ -443,13 +1457,13 @@ async function insertDashboardData(data: DashboardData) {
     await db.insert(chartSeriesTable).values(chartValues);
   }
 
-  if (data.executiveSchedules.length) {
-    await db.insert(executiveSchedulesTable).values(data.executiveSchedules);
+  if (executiveSchedules.length) {
+    await db.insert(executiveSchedulesTable).values(executiveSchedules);
   }
 
-  if (data.awardCollections.length) {
+  if (awardCollections.length) {
     await db.insert(awardCollectionsTable).values(
-      data.awardCollections.map((collection, index) => ({
+      awardCollections.map((collection, index) => ({
         id: collection.id,
         title: collection.title,
         description: collection.description,
@@ -457,7 +1471,7 @@ async function insertDashboardData(data: DashboardData) {
       })),
     );
 
-    const awardValues = data.awardCollections.flatMap((collection, collectionIndex) =>
+    const awardValues = awardCollections.flatMap((collection, collectionIndex) =>
       collection.items.map((item, itemIndex) => ({
         collectionId: collection.id,
         itemId: item.id,
@@ -475,32 +1489,44 @@ async function insertDashboardData(data: DashboardData) {
     }
   }
 
-  if (data.publications.length) {
-    await db.insert(publicationsTable).values(data.publications);
+  if (publications.length) {
+    await db.insert(publicationsTable).values(publications);
   }
 
-  if (data.activities.length) {
-    await db.insert(activitiesTable).values(data.activities);
+  if (datasets.length) {
+    await db.insert(datasetsTable).values(datasets);
   }
 
-  if (data.videos.length) {
-    await db.insert(videosTable).values(data.videos);
+  if (releaseSchedules.length) {
+    await db.insert(releaseSchedulesTable).values(releaseSchedules);
   }
 
-  await db.insert(contactInfoTable).values({ id: 1, ...data.contact });
+  if (officeLocations.length) {
+    await db.insert(officeLocationsTable).values(officeLocations);
+  }
+
+  if (activities.length) {
+    await db.insert(activitiesTable).values(activities);
+  }
+
+  if (videos.length) {
+    await db.insert(videosTable).values(videos);
+  }
+
+  await db.insert(contactInfoTable).values({ id: 1, ...contact });
 
   const filterValues = [
-    ...data.filters.years.map((value, index) => ({
+    ...filters.years.map((value, index) => ({
       kind: "year" as const,
       value,
       sortOrder: index,
     })),
-    ...data.filters.categories.map((value, index) => ({
+    ...filters.categories.map((value, index) => ({
       kind: "category" as const,
       value,
       sortOrder: 100 + index,
     })),
-    ...data.filters.regions.map((value, index) => ({
+    ...filters.regions.map((value, index) => ({
       kind: "region" as const,
       value,
       sortOrder: 200 + index,
@@ -522,22 +1548,42 @@ function toChartPoints(
   const grouped = new Map<number, ChartPoint>();
 
   for (const item of rawChartSeries) {
-    const point =
-      grouped.get(item.year) ??
-      ({
-        year: item.year,
-        "Pendidikan Madrasah": 0,
-        "Bimas Islam": 0,
-        SPAK: 0,
-        "Layanan Publik": 0,
-      } satisfies ChartPoint);
-
-    if (chartCategories.includes(item.category as keyof Omit<ChartPoint, "year">)) {
-      point[item.category as keyof Omit<ChartPoint, "year">] = item.value;
-    }
-
+    const point = grouped.get(item.year) ?? ({ year: item.year } as ChartPoint);
+    point[item.category] = item.value;
     grouped.set(item.year, point);
   }
 
   return Array.from(grouped.values()).sort((a, b) => a.year - b.year);
+}
+
+function normalizeDashboardRows(sourceRows: DashboardRow[]) {
+  return [
+    ...sourceRows.filter((row) => row.category !== "IPS"),
+    ...ipsRows,
+  ];
+}
+
+function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow[]) {
+  const withoutStaleIps = chartSeries.map((point) => {
+    const cleanPoint = { ...point } as ChartPoint;
+    delete cleanPoint.IPS;
+    return cleanPoint;
+  });
+  const ipsValues = sourceRows
+    .filter((row) => row.category === "IPS" && row.year === 2025)
+    .map((row) => row.value)
+    .filter((value) => Number.isFinite(value));
+
+  if (!ipsValues.length) return withoutStaleIps;
+
+  const ipsAverage =
+    ipsValues.reduce((total, value) => total + value, 0) / ipsValues.length;
+  const chartByYear = new Map<number, ChartPoint>(
+    withoutStaleIps.map((point) => [point.year, point]),
+  );
+  const point2025 = chartByYear.get(2025) ?? ({ year: 2025 } as ChartPoint);
+  point2025.IPS = Number(ipsAverage.toFixed(2));
+  chartByYear.set(2025, point2025);
+
+  return Array.from(chartByYear.values()).sort((a, b) => a.year - b.year);
 }

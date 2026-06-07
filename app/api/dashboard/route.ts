@@ -12,7 +12,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const data = await getDashboardData();
 
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
 }
 
 export async function PUT(request: Request) {
