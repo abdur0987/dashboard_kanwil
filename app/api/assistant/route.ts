@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { searchAssistantKnowledge } from "@/lib/services/assistant-knowledge";
 
 import { getDashboardData } from "@/lib/services/dashboard";
 import type { DashboardData, ExecutiveSchedule, Indicator } from "@/lib/types";
@@ -35,6 +36,134 @@ export async function POST(request: Request) {
   const message = (payload.message ?? "").trim();
   const data = await getDashboardData();
   const snapshot = buildDashboardSnapshot(data);
+  const knowledgeMatches = searchAssistantKnowledge(message, 12);
+
+  if (message && knowledgeMatches.length) {
+    const question = normalizeText(message);
+
+    const isSpecificQuestion =
+      question.includes("berapa") ||
+      question.includes("jumlah") ||
+      question.includes("total");
+
+    const wilayahKeywords = [
+      "lampung barat",
+      "lampung selatan",
+      "lampung tengah",
+      "lampung timur",
+      "lampung utara",
+      "tanggamus",
+      "tulang bawang",
+      "way kanan",
+      "pesawaran",
+      "tulang bawang barat",
+      "mesuji",
+      "pringsewu",
+      "pesisir barat",
+      "bandar lampung",
+      "metro",
+    ];
+
+    const matchedWilayah = wilayahKeywords.find((wilayah) =>
+      question.includes(wilayah),
+    );
+
+    const filteredMatches = knowledgeMatches.filter((item) => {
+      const rowText = normalizeText(item.rowText);
+      const tableTitle = normalizeText(item.tableTitle);
+
+      if (matchedWilayah && !rowText.includes(matchedWilayah)) {
+        return false;
+      }
+
+      if (
+        question.includes("penduduk") &&
+        question.includes("islam") &&
+        !(tableTitle.includes("penduduk") && tableTitle.includes("agama"))
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const finalMatches = filteredMatches.length ? filteredMatches : knowledgeMatches;
+    const bestMatch = finalMatches[0];
+
+    if (isSpecificQuestion && bestMatch) {
+      const islamMatch = bestMatch.rowText.match(/Islam:\s*([^;]+)/i);
+      const jumlahMatch = bestMatch.rowText.match(/Jumlah:\s*([^;]+)/i);
+      const satuanKerjaMatch = bestMatch.rowText.match(/Satuan Kerja:\s*([^;]+)/i);
+
+      const satuanKerja =
+        satuanKerjaMatch?.[1]?.trim() || matchedWilayah || "wilayah tersebut";
+      const islamValue = islamMatch?.[1]?.trim();
+      const jumlahValue = jumlahMatch?.[1]?.trim();
+
+      let answerText = `Berdasarkan ${bestMatch.tableTitle}, ${satuanKerja}`;
+
+      if (question.includes("islam") && islamValue) {
+        answerText += ` memiliki jumlah penduduk beragama Islam sebanyak ${Number(
+          islamValue,
+        ).toLocaleString("id-ID")} jiwa.`;
+      } else if (jumlahValue) {
+        answerText += ` memiliki jumlah total sebanyak ${Number(jumlahValue).toLocaleString(
+          "id-ID",
+        )}.`;
+      } else {
+        answerText += ` memiliki data sebagai berikut: ${bestMatch.rowText}.`;
+      }
+
+      answerText += `\n\nSumber: ${bestMatch.datasetTitle}, ${bestMatch.tableTitle}, sheet ${bestMatch.sheetName}.`;
+
+      return NextResponse.json(
+        {
+          answer: answerText,
+          points: [
+            bestMatch.rowText,
+            `Sumber: ${bestMatch.datasetTitle}, ${bestMatch.tableTitle}, sheet ${bestMatch.sheetName}`,
+          ],
+          suggestions: [
+            "Tampilkan data per kabupaten",
+            "Ringkas dataset ini",
+            "Buat poin penting pimpinan",
+          ],
+          source: "assistant-knowledge",
+          generatedAt: new Date().toISOString(),
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        },
+      );
+    }
+
+    const points = finalMatches.slice(0, 5).map((item) => {
+      return `${item.rowText} | Sumber: ${item.datasetTitle}, ${item.tableTitle}, sheet ${item.sheetName}`;
+    });
+
+    return NextResponse.json(
+      {
+        answer: `Saya menemukan data yang relevan dari dataset Excel:\n${points
+          .map((point) => `- ${point}`)
+          .join("\n")}`,
+        points,
+        suggestions: [
+          "Ringkas dataset ini",
+          "Tampilkan data per kabupaten",
+          "Buat poin penting pimpinan",
+        ],
+        source: "assistant-knowledge",
+        generatedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
+  }
   const answer = buildAssistantAnswer(message, payload.mode, data, snapshot);
 
   return NextResponse.json(
