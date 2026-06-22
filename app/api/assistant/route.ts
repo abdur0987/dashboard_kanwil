@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  answerAssistantKnowledgeQuestion,
+  searchAssistantKnowledge,
+} from "@/lib/services/assistant-knowledge";
+import { generateOpenAiAssistantAnswer } from "@/lib/services/openai-assistant";
 
 import { getDashboardData } from "@/lib/services/dashboard";
 import type { DashboardData, ExecutiveSchedule, Indicator } from "@/lib/types";
@@ -33,8 +38,210 @@ const quickSuggestions = [
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as AssistantRequest;
   const message = (payload.message ?? "").trim();
+  const preciseKnowledgeAnswer = answerAssistantKnowledgeQuestion(message);
+
+  if (preciseKnowledgeAnswer) {
+    return NextResponse.json(
+      {
+        answer: preciseKnowledgeAnswer.answer,
+        points: preciseKnowledgeAnswer.points,
+        suggestions: preciseKnowledgeAnswer.suggestions,
+        source: "assistant-knowledge",
+        generatedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
+  }
+
   const data = await getDashboardData();
   const snapshot = buildDashboardSnapshot(data);
+  const knowledgeMatches = searchAssistantKnowledge(message, 12);
+
+  const openAiAnswer = await generateOpenAiAssistantAnswer({
+    message,
+    mode: payload.mode,
+    source: payload.source,
+    data,
+    snapshot,
+    knowledgeMatches,
+  });
+
+  if (openAiAnswer) {
+    return NextResponse.json(
+      {
+        answer: openAiAnswer.answer,
+        points: openAiAnswer.answer
+          .split("\n")
+          .map((line) => line.replace(/^[-*]\s*/, "").trim())
+          .filter(Boolean)
+          .slice(0, 8),
+        suggestions: openAiAnswer.suggestions,
+        source: "openai-dashboard",
+        generatedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
+  }
+
+  const normalizedMessage = normalizeText(message);
+
+  if (includesAny(normalizedMessage, ["lokasi", "alamat", "dimana", "letak", "kontak", "telepon", "email", "website"])) {
+    const answer = buildContactAnswer(data, [
+      "Agenda terdekat di mana?",
+      "Tampilkan kontak resmi",
+      "Buat ringkasan pimpinan",
+    ]);
+
+    return NextResponse.json(
+      {
+        answer: answer.text,
+        points: answer.points,
+        suggestions: answer.suggestions,
+        source: "dashboard-data",
+        generatedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
+  }
+
+  if (message && knowledgeMatches.length) {
+    const question = normalizeText(message);
+
+    const isSpecificQuestion =
+      question.includes("berapa") ||
+      question.includes("jumlah") ||
+      question.includes("total");
+
+    const wilayahKeywords = [
+      "lampung barat",
+      "lampung selatan",
+      "lampung tengah",
+      "lampung timur",
+      "lampung utara",
+      "tanggamus",
+      "tulang bawang",
+      "way kanan",
+      "pesawaran",
+      "tulang bawang barat",
+      "mesuji",
+      "pringsewu",
+      "pesisir barat",
+      "bandar lampung",
+      "metro",
+    ];
+
+    const matchedWilayah = wilayahKeywords.find((wilayah) =>
+      question.includes(wilayah),
+    );
+
+    const filteredMatches = knowledgeMatches.filter((item) => {
+      const rowText = normalizeText(item.rowText);
+      const tableTitle = normalizeText(item.tableTitle);
+
+      if (matchedWilayah && !rowText.includes(matchedWilayah)) {
+        return false;
+      }
+
+      if (
+        question.includes("penduduk") &&
+        question.includes("islam") &&
+        !(tableTitle.includes("penduduk") && tableTitle.includes("agama"))
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const finalMatches = filteredMatches.length ? filteredMatches : knowledgeMatches;
+    const bestMatch = finalMatches[0];
+
+    if (isSpecificQuestion && bestMatch) {
+      const islamMatch = bestMatch.rowText.match(/Islam:\s*([^;]+)/i);
+      const jumlahMatch = bestMatch.rowText.match(/Jumlah:\s*([^;]+)/i);
+      const satuanKerjaMatch = bestMatch.rowText.match(/Satuan Kerja:\s*([^;]+)/i);
+
+      const satuanKerja =
+        satuanKerjaMatch?.[1]?.trim() || matchedWilayah || "wilayah tersebut";
+      const islamValue = islamMatch?.[1]?.trim();
+      const jumlahValue = jumlahMatch?.[1]?.trim();
+
+      let answerText = `Berdasarkan ${bestMatch.tableTitle}, ${satuanKerja}`;
+
+      if (question.includes("islam") && islamValue) {
+        answerText += ` memiliki jumlah penduduk beragama Islam sebanyak ${Number(
+          islamValue,
+        ).toLocaleString("id-ID")} jiwa.`;
+      } else if (jumlahValue) {
+        answerText += ` memiliki jumlah total sebanyak ${Number(jumlahValue).toLocaleString(
+          "id-ID",
+        )}.`;
+      } else {
+        answerText += ` memiliki data sebagai berikut: ${bestMatch.rowText}.`;
+      }
+
+      answerText += `\n\nSumber: ${bestMatch.datasetTitle}, ${bestMatch.tableTitle}, sheet ${bestMatch.sheetName}.`;
+
+      return NextResponse.json(
+        {
+          answer: answerText,
+          points: [
+            bestMatch.rowText,
+            `Sumber: ${bestMatch.datasetTitle}, ${bestMatch.tableTitle}, sheet ${bestMatch.sheetName}`,
+          ],
+          suggestions: [
+            "Tampilkan data per kabupaten",
+            "Ringkas dataset ini",
+            "Buat poin penting pimpinan",
+          ],
+          source: "assistant-knowledge",
+          generatedAt: new Date().toISOString(),
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        },
+      );
+    }
+
+    const points = finalMatches.slice(0, 5).map((item) => {
+      return `${item.rowText} | Sumber: ${item.datasetTitle}, ${item.tableTitle}, sheet ${item.sheetName}`;
+    });
+
+    return NextResponse.json(
+      {
+        answer: `Saya menemukan data yang relevan dari dataset Excel:\n${points
+          .map((point) => `- ${point}`)
+          .join("\n")}`,
+        points,
+        suggestions: [
+          "Ringkas dataset ini",
+          "Tampilkan data per kabupaten",
+          "Buat poin penting pimpinan",
+        ],
+        source: "assistant-knowledge",
+        generatedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    );
+  }
   const answer = buildAssistantAnswer(message, payload.mode, data, snapshot);
 
   return NextResponse.json(

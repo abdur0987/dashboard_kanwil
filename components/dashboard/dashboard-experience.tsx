@@ -16,10 +16,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -2087,153 +2084,6 @@ function AwardCarousel({
   );
 }
 
-function ExecutiveAwardGallery({
-  collection,
-  delay,
-}: {
-  collection: AwardCollection;
-  delay: number;
-}) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const items = useMemo(() => uniqueAwardItems(collection.items), [collection.items]);
-  const activeAward = items[activeIndex] ?? items[0];
-  const totalItems = items.length;
-  const accentLabel = collection.id === "ppid" ? "PPID" : "Capaian Kanwil";
-
-  useEffect(() => {
-    if (totalItems <= 1) return;
-
-    const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % totalItems);
-    }, delay);
-
-    return () => window.clearInterval(timer);
-  }, [delay, totalItems]);
-
-  useEffect(() => {
-    if (activeIndex >= totalItems) {
-      setActiveIndex(0);
-    }
-  }, [activeIndex, totalItems]);
-
-  const showPrevious = () => {
-    setActiveIndex((current) => (current - 1 + totalItems) % totalItems);
-  };
-
-  const showNext = () => {
-    setActiveIndex((current) => (current + 1) % totalItems);
-  };
-
-  if (!activeAward) return null;
-
-  return (
-    <article className="executive-award-gallery">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="rounded-md border border-white/70 bg-white/45 p-2 text-primary shadow-sm backdrop-blur-2xl">
-              <Award className="h-4 w-4" />
-            </span>
-            <Badge variant={collection.id === "ppid" ? "success" : "outline"}>
-              {totalItems} Foto
-            </Badge>
-          </div>
-          <h3 className="text-2xl font-bold leading-tight text-slate-950">
-            {collection.title}
-          </h3>
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">
-            {collection.description}
-          </p>
-        </div>
-        <span className="whitespace-nowrap rounded-md border border-white/70 bg-white/45 px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-800 shadow-sm backdrop-blur-2xl">
-          Slide {activeIndex + 1}/{totalItems}
-        </span>
-      </div>
-
-      <div className="executive-award-focus group">
-        <Image
-          key={`executive-${collection.id}-${activeAward.id}`}
-          src={activeAward.imageUrl}
-          alt={activeAward.alt}
-          fill
-          sizes="(min-width: 1280px) 46vw, 100vw"
-          className="object-cover transition duration-700 group-hover:scale-[1.015]"
-          priority={collection.id === "capaian-kanwil"}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/72 via-slate-950/12 to-white/10" />
-        <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-          <Badge variant={collection.id === "ppid" ? "success" : "secondary"}>
-            {accentLabel}
-          </Badge>
-          <Badge variant="outline" className="bg-white/55">
-            {activeAward.year}
-          </Badge>
-        </div>
-        <div className="absolute inset-x-4 bottom-4 rounded-lg border border-white/35 bg-white/20 p-4 text-white shadow-sm backdrop-blur-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/75">
-            Galeri otomatis
-          </p>
-          <h4 className="mt-1 text-2xl font-bold leading-tight">{activeAward.title}</h4>
-          <p className="mt-1 line-clamp-2 text-sm leading-6 text-white/82">
-            {activeAward.description}
-          </p>
-        </div>
-      </div>
-
-      <div className="executive-award-meta">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">
-            {accentLabel}
-          </p>
-          <p className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-slate-700">
-            {activeAward.description}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 rounded-full bg-white/45"
-            onClick={showPrevious}
-            aria-label={`Foto sebelumnya ${collection.title}`}
-            disabled={totalItems <= 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-1.5">
-            {items.map((award, index) => (
-              <button
-                key={`executive-dot-${collection.id}-${award.id}`}
-                type="button"
-                onClick={() => setActiveIndex(index)}
-                className={`h-2.5 rounded-full transition-all ${
-                  index === activeIndex
-                    ? "w-8 bg-emerald-700"
-                    : "w-2.5 bg-emerald-900/20 hover:bg-emerald-800/40"
-                }`}
-                aria-label={`Tampilkan foto ${index + 1} ${collection.title}`}
-                aria-current={index === activeIndex}
-              />
-            ))}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 rounded-full bg-white/45"
-            onClick={showNext}
-            aria-label={`Foto berikutnya ${collection.title}`}
-            disabled={totalItems <= 1}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </article>
-  );
-}
-
 export function SlideShowExperience({
   data: initialData,
   onClose,
@@ -2248,14 +2098,12 @@ export function SlideShowExperience({
   const intervalMs = 9000;
   const slides = [
     "Ringkasan",
-    "Penghargaan",
+    "Data Strategis",
     "Agenda",
     "Berita",
     "Statistik",
-    "Komposisi",
-    "Dataset",
-    "Jadwal Rilis",
-    "Geotagging",
+    "Penghargaan",
+    "Kesimpulan",
   ];
   const handleClose = useCallback(() => {
     if (onClose) {
@@ -2325,13 +2173,6 @@ export function SlideShowExperience({
     return () => window.clearInterval(timer);
   }, [playing, slides.length]);
 
-  const categoryTotals = useMemo(() => {
-    return data.rows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.category] = (acc[row.category] ?? 0) + row.value;
-      return acc;
-    }, {});
-  }, [data.rows]);
-
   const chartSeries = data.chartSeries;
   const visibleCategories = data.filters.categories.filter(
     (item) => item !== "Semua Kategori",
@@ -2367,9 +2208,6 @@ export function SlideShowExperience({
     };
   }, [chartSeries, visibleCategories]);
 
-  const monitorPieData = useMemo(() => {
-    return Object.entries(categoryTotals).map(([name, value]) => ({ name, value }));
-  }, [categoryTotals]);
   const latestDashboardRows = useMemo(() => {
     const latestYear = data.rows.reduce((year, row) => Math.max(year, row.year), 0);
 
@@ -2395,30 +2233,6 @@ export function SlideShowExperience({
       null,
     );
   }, [latestDashboardRows]);
-  const compositionHighlights = useMemo(() => {
-    const sorted = [...monitorPieData].sort((a, b) => b.value - a.value);
-    const strongest = sorted[0];
-    const weakest = sorted[sorted.length - 1];
-
-    return [
-      {
-        label: "Bidang dominan",
-        title: strongest?.name ?? "-",
-        value: strongest ? formatNumber(strongest.value) : "-",
-        note: "Kontribusi data terbesar pada komposisi dashboard.",
-      },
-      {
-        label: "Perlu dipantau",
-        title: weakest?.name ?? "-",
-        value: weakest ? formatNumber(weakest.value) : "-",
-        note:
-          weakest?.name === "IPS"
-            ? "IPS memakai skala indeks, sehingga dibaca terpisah dari capaian persentase."
-            : "Nilai komposisi terendah dan perlu dilihat konteks indikatornya.",
-      },
-    ];
-  }, [monitorPieData]);
-
   const latestIndicators = data.indicators.slice(0, 4);
   const [featuredNews, ...secondaryNews] = data.latestNews;
   const agendaCount = data.executiveSchedules.length;
@@ -2520,6 +2334,96 @@ export function SlideShowExperience({
       };
     });
   }, [chartSeries, trendSnapshot.strongestCategory, visibleCategories]);
+  const executiveDatasetSummaries = useMemo(() => {
+    const modules = [
+      {
+        label: "Tata Kelola",
+        title: "Tata kelola dan manajemen",
+        matcher: (value: string) => value.includes("tata kelola"),
+        tone: "emerald" as const,
+      },
+      {
+        label: "Pendidikan",
+        title: "Pendidikan Agama Islam",
+        matcher: (value: string) => value.includes("pendidikan"),
+        tone: "cyan" as const,
+      },
+      {
+        label: "Agama dan Keagamaan",
+        title: "Pelayanan agama dan keagamaan",
+        matcher: (value: string) =>
+          value.includes("agama") || value.includes("keagamaan") || value.includes("bimas"),
+        tone: "gold" as const,
+      },
+      {
+        label: "IPS",
+        title: "Indeks Pembangunan Statistik",
+        matcher: (value: string) => value.includes("ips") || value.includes("indeks pembangunan statistik"),
+        tone: "violet" as const,
+      },
+    ];
+
+    return modules.map((module) => {
+      const details = data.datasetDetails.filter((detail) => {
+        const haystack = normalizeDisplayText(`${detail.module} ${detail.category} ${detail.title}`);
+        return module.matcher(haystack);
+      });
+      const rows = details.reduce((total, detail) => total + detail.rows.length, 0);
+      const latest = details[0];
+
+      return {
+        ...module,
+        count: details.length,
+        rows,
+        latestTitle: latest?.title ?? "Belum ada dataset",
+        latestTable: latest?.tableNumber ?? "-",
+        year: latest?.year ?? trendSnapshot.latestYear,
+      };
+    });
+  }, [data.datasetDetails, trendSnapshot.latestYear]);
+  const latestAward = useMemo(() => {
+    const collections = data.awardCollections;
+    const firstCollection = collections[0];
+    const firstItem = firstCollection ? uniqueAwardItems(firstCollection.items)[0] : null;
+
+    return firstCollection && firstItem
+      ? {
+          collection: firstCollection,
+          item: firstItem,
+        }
+      : null;
+  }, [data.awardCollections]);
+  const executiveConclusions = useMemo(() => {
+    const ipsCard = latestCategoryCards.find((item) => item.category === "IPS");
+    const points = [
+      `Rata-rata indikator terbaru berada di ${formatNumber(latestRowAverage)} dari ${latestDashboardRows.length} data.`,
+      strongestLatestRow
+        ? `Kinerja terkuat: ${strongestLatestRow.indicator} dengan nilai ${formatNumber(strongestLatestRow.value)} ${strongestLatestRow.unit}.`
+        : "Kinerja terkuat belum tersedia.",
+      weakestLatestRow
+        ? `Perlu dipantau: ${weakestLatestRow.indicator} dengan nilai ${formatNumber(weakestLatestRow.value)} ${weakestLatestRow.unit}.`
+        : "Area pemantauan belum tersedia.",
+      ipsCard
+        ? `Nilai IPS terbaru terbaca ${formatNumber(ipsCard.value)} dan perlu dijaga sebagai kualitas tata kelola data.`
+        : "Nilai IPS belum tersedia di ringkasan terbaru.",
+      focusSchedule
+        ? `Agenda terdekat: ${focusSchedule.title}, ${focusSchedule.date} pukul ${focusSchedule.time}.`
+        : "Agenda terdekat belum tersedia.",
+      featuredNews
+        ? `Berita terbaru: ${featuredNews.title}.`
+        : "Berita terbaru belum tersedia dari portal resmi.",
+    ];
+
+    return points;
+  }, [
+    featuredNews,
+    focusSchedule,
+    latestCategoryCards,
+    latestDashboardRows.length,
+    latestRowAverage,
+    strongestLatestRow,
+    weakestLatestRow,
+  ]);
   const updatedLabel = lastUpdated
     ? lastUpdated.toLocaleTimeString("id-ID", {
         hour: "2-digit",
@@ -2531,7 +2435,7 @@ export function SlideShowExperience({
   return (
     <main
       className={`executive-monitor-backdrop ${
-        activeSlide === 2 || activeSlide === 7 || activeSlide === 8
+        activeSlide === 2 || activeSlide === 5
           ? "executive-monitor-photo-backdrop"
           : ""
       }`}
@@ -2786,14 +2690,73 @@ export function SlideShowExperience({
             ) : null}
 
             {activeSlide === 1 ? (
-              <div className="grid h-full gap-4 lg:grid-cols-2">
-                {data.awardCollections.map((collection) => (
-                  <ExecutiveAwardGallery
-                    key={collection.id}
-                    collection={collection}
-                    delay={collection.id === "ppid" ? 4300 : 5200}
-                  />
-                ))}
+              <div className="executive-monitor-card grid h-full grid-rows-[auto_1fr] gap-5 p-5 md:p-7">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/85">
+                      Data Strategis
+                    </p>
+                    <h3 className="mt-2 text-3xl font-bold text-white md:text-4xl">
+                      Point penting dataset Kanwil
+                    </h3>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-white/68">
+                      Ringkasan pendek dari empat kelompok utama agar pimpinan cepat
+                      melihat cakupan data dan fokus terbaru.
+                    </p>
+                  </div>
+                  <Badge className="border-white/25 bg-white/15 px-3 py-2 text-white backdrop-blur-2xl">
+                    <Database className="mr-2 h-4 w-4" />
+                    {data.datasetDetails.length} Tabel Data
+                  </Badge>
+                </div>
+
+                <div className="grid min-h-0 gap-4 xl:grid-cols-4">
+                  {executiveDatasetSummaries.map((item) => (
+                    <div
+                      key={item.label}
+                      className={`executive-monitor-tile monitor-stat-${item.tone} flex min-h-[330px] flex-col justify-between gap-5`}
+                      style={toneStyle(item.tone)}
+                    >
+                      <div>
+                        <div
+                          className={`summary-service-icon summary-tone-${item.tone}`}
+                          style={toneStyle(item.tone)}
+                        >
+                          <Database className="h-5 w-5" />
+                        </div>
+                        <p
+                          className={`mt-5 summary-kicker summary-text-${item.tone}`}
+                          style={toneStyle(item.tone)}
+                        >
+                          {item.label}
+                        </p>
+                        <h4 className="mt-2 text-2xl font-bold leading-tight text-white">
+                          {item.title}
+                        </h4>
+                        <p className="mt-3 line-clamp-4 text-sm leading-6 text-white/66">
+                          Fokus terbaru: {item.latestTitle}
+                        </p>
+                      </div>
+                      <div className="grid gap-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <MonitorStat
+                            label="Tabel"
+                            value={String(item.count)}
+                            tone={item.tone}
+                          />
+                          <MonitorStat
+                            label="Baris"
+                            value={formatNumber(item.rows)}
+                            tone={item.tone}
+                          />
+                        </div>
+                        <div className="rounded-lg border border-white/20 bg-white/10 p-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/72 backdrop-blur-2xl">
+                          {item.latestTable} · {item.year}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
 
@@ -3167,163 +3130,175 @@ export function SlideShowExperience({
             ) : null}
 
             {activeSlide === 5 ? (
-              <div className="grid h-full gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                <div className="executive-monitor-card p-5 md:p-7">
-                  <h3 className="text-3xl font-bold text-white">Komposisi Kategori</h3>
-                  <p className="mt-3 text-base leading-7 text-white/70">
-                    Akumulasi nilai tiap bidang layanan untuk pembacaan cepat.
-                  </p>
-                  <div className="mt-8 grid gap-3">
-                    {compositionHighlights.map((item) => (
-                      <div key={item.label} className="rounded-lg border border-white/18 bg-white/12 p-4 shadow-glass backdrop-blur-2xl">
+              <div className="executive-photo-slide grid h-full min-h-0 gap-4 xl:grid-cols-[1.12fr_0.88fr]">
+                <div className="executive-monitor-card overflow-hidden p-4 md:p-5">
+                  {latestAward ? (
+                    <div className="relative h-full min-h-[560px] overflow-hidden rounded-lg border border-white/25 bg-white/10">
+                      <Image
+                        src={latestAward.item.imageUrl}
+                        alt={latestAward.item.title}
+                        fill
+                        sizes="(min-width: 1280px) 58vw, 100vw"
+                        className="object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/88 via-slate-950/18 to-transparent" />
+                      <div className="absolute left-5 top-5 flex flex-wrap gap-2">
+                        <Badge className="border-amber-100/50 bg-amber-300/80 text-slate-950">
+                          Penghargaan Terbaru
+                        </Badge>
+                        <Badge className="border-white/35 bg-white/18 text-white backdrop-blur-2xl">
+                          {latestAward.item.year}
+                        </Badge>
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 p-5 md:p-7">
+                        <div className="rounded-lg border border-white/25 bg-slate-950/46 p-5 text-white shadow-glass backdrop-blur-2xl">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-100">
+                            {latestAward.collection.title}
+                          </p>
+                          <h3 className="mt-3 text-4xl font-bold leading-tight">
+                            {latestAward.item.title}
+                          </h3>
+                          <p className="mt-3 max-w-3xl text-base leading-7 text-white/72">
+                            {latestAward.item.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid h-full min-h-[560px] place-items-center rounded-lg border border-white/20 bg-white/10 p-8 text-center text-white/70">
+                      Koleksi penghargaan belum tersedia.
+                    </div>
+                  )}
+                </div>
+
+                <div className="executive-monitor-card grid min-h-0 grid-rows-[auto_1fr] gap-5 p-5 md:p-7">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/85">
+                      Penghargaan Kanwil
+                    </p>
+                    <h3 className="mt-2 text-3xl font-bold text-white md:text-4xl">
+                      Prestasi terbaru untuk etalase pimpinan
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-white/68">
+                      Menampilkan koleksi capaian Kanwil dan PPID sebagai bukti
+                      layanan, tata kelola, serta keterbukaan informasi.
+                    </p>
+                  </div>
+
+                  <div className="grid min-h-0 content-start gap-3">
+                    <MonitorStat
+                      label="Total Foto"
+                      value={String(awardPhotoCount)}
+                      tone="gold"
+                    />
+                    <MonitorStat
+                      label="Koleksi"
+                      value={String(data.awardCollections.length)}
+                      tone="emerald"
+                    />
+                    {data.awardCollections.map((collection) => (
+                      <div
+                        key={collection.id}
+                        className="rounded-lg border border-white/18 bg-white/12 p-4 shadow-glass backdrop-blur-2xl"
+                      >
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">
-                              {item.label}
+                              {collection.id === "ppid" ? "PPID" : "Capaian Kanwil"}
                             </p>
-                            <h4 className="mt-2 text-2xl font-bold text-white">{item.title}</h4>
+                            <h4 className="mt-2 text-xl font-bold text-white">
+                              {collection.title}
+                            </h4>
                           </div>
-                          <strong className="text-3xl text-white">{item.value}</strong>
+                          <Badge className="border-white/25 bg-white/15 text-white">
+                            {uniqueAwardItems(collection.items).length} Foto
+                          </Badge>
                         </div>
-                        <p className="mt-3 text-sm leading-6 text-white/68">{item.note}</p>
-                      </div>
-                    ))}
-                    {Object.entries(categoryTotals).map(([name, value]) => (
-                      <div key={name} className="executive-monitor-tile">
-                        <span className="font-semibold text-white">{name}</span>
-                        <strong className="text-2xl text-white">{formatNumber(value)}</strong>
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/66">
+                          {collection.description}
+                        </p>
                       </div>
                     ))}
                   </div>
-                </div>
-                <div className="executive-monitor-card p-5 md:p-7">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={monitorPieData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius="48%"
-                        outerRadius="78%"
-                        paddingAngle={5}
-                      >
-                        {monitorPieData.map((entry) => (
-                          <Cell
-                            key={entry.name}
-                            fill={chartColors[entry.name as keyof typeof chartColors] ?? "#64748b"}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend wrapperStyle={{ color: "#ffffff", fontWeight: 700 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
                 </div>
               </div>
             ) : null}
 
             {activeSlide === 6 ? (
-              <div className="executive-monitor-card grid h-full grid-rows-[auto_1fr] gap-5 p-5 md:p-7">
-                <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="executive-monitor-card grid h-full min-h-0 gap-5 p-5 md:p-7 xl:grid-cols-[0.88fr_1.12fr]">
+                <div className="grid min-h-0 content-between gap-5">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100/85">
-                      Katalog Dataset
+                      Kesimpulan Eksekutif
                     </p>
-                    <h3 className="mt-2 text-3xl font-bold text-white md:text-4xl">
-                      Dataset resmi Kanwil Kemenag Lampung
+                    <h3 className="mt-2 text-4xl font-bold leading-tight text-white md:text-5xl">
+                      Performance Kanwil saat ini
                     </h3>
-                    <p className="mt-2 max-w-3xl text-sm leading-6 text-white/68">
-                      Daftar data siap unduh untuk masyarakat, lengkap dengan standar
-                      data dan metadata yang dapat dikelola melalui panel admin.
+                    <p className="mt-4 max-w-2xl text-base leading-7 text-white/70">
+                      Ringkasan otomatis dari indikator, dataset, agenda SIMANDA,
+                      berita resmi, dan penghargaan terbaru.
                     </p>
                   </div>
-                  <Badge className="border-white/25 bg-white/15 px-3 py-2 text-white backdrop-blur-2xl">
-                    <Database className="mr-2 h-4 w-4" />
-                    {data.datasets.length} Dataset
-                  </Badge>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <MonitorStat
+                      label="Rata-rata"
+                      value={formatNumber(latestRowAverage)}
+                      tone="emerald"
+                    />
+                    <MonitorStat
+                      label="Data terbaru"
+                      value={String(latestDashboardRows.length)}
+                      tone="cyan"
+                    />
+                    <MonitorStat
+                      label="Agenda dekat"
+                      value={focusSchedule ? "1" : "0"}
+                      tone="gold"
+                    />
+                    <MonitorStat
+                      label="Berita"
+                      value={String(data.latestNews.length)}
+                      tone="blue"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-amber-200/25 bg-amber-300/12 p-5 shadow-glass backdrop-blur-2xl">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-100">
+                      Rekomendasi singkat
+                    </p>
+                    <p className="mt-3 text-lg font-semibold leading-8 text-white">
+                      Pertahankan capaian tertinggi, pantau indikator terendah,
+                      pastikan agenda prioritas terdekat terbaca jelas, dan terus
+                      perbarui dataset agar AI serta slideshow memberi ringkasan
+                      yang relevan.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="grid min-h-0 gap-4 overflow-hidden xl:grid-cols-[0.9fr_1.1fr]">
-                  <div className="executive-monitor-card border-white/20 bg-white/10 p-5">
-                    <h4 className="text-2xl font-bold text-white">
-                      Fokus data pimpinan
-                    </h4>
-                    <p className="mt-3 text-sm leading-6 text-white/68">
-                      Dataset dibagi ke dalam Tata Kelola dan Manajemen, Pelayanan
-                      Keagamaan, Pendidikan Agama Islam, IPS, serta dataset publik
-                      pendukung. File Excel/PDF tetap ringan karena disimpan sebagai
-                      dokumen unduhan, bukan dimuat seluruhnya ke layar utama.
-                    </p>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                      <MonitorStat
-                        label="Dataset"
-                        value={String(data.datasets.length)}
-                        tone="blue"
-                      />
-                      <MonitorStat
-                        label="Produsen"
-                        value={String(
-                          new Set(data.datasets.map((dataset) => dataset.producer)).size,
-                        )}
-                        tone="emerald"
-                      />
-                      <MonitorStat
-                        label="Excel"
-                        value={String(
-                          data.datasets.filter((dataset) => dataset.excelUrl).length,
-                        )}
-                        tone="cyan"
-                      />
-                      <MonitorStat
-                        label="PDF"
-                        value={String(data.datasets.filter((dataset) => dataset.pdfUrl).length)}
-                        tone="gold"
-                      />
-                    </div>
-                  </div>
+                <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
+                  {executiveConclusions.map((point, index) => {
+                    const tones = ["emerald", "cyan", "gold", "blue", "violet", "rose"] as const;
+                    const tone = tones[index % tones.length];
 
-                  <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
-                    {data.datasets.map((dataset) => (
-                      <div key={dataset.id} className="executive-monitor-tile">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge className="border-emerald-200/35 bg-emerald-300/18 text-emerald-50">
-                              {dataset.category}
-                            </Badge>
-                            <Badge className="border-white/25 bg-white/15 text-white">
-                              {dataset.year}
-                            </Badge>
-                          </div>
-                          <h4 className="mt-3 text-lg font-bold leading-snug text-white">
-                            {dataset.title}
-                          </h4>
-                          <p className="mt-2 line-clamp-2 text-sm leading-6 text-white/65">
-                            {dataset.description}
-                          </p>
+                    return (
+                      <div
+                        key={point}
+                        className={`executive-monitor-tile monitor-stat-${tone} items-start gap-4`}
+                        style={toneStyle(tone)}
+                      >
+                        <div
+                          className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-white/20 bg-white/12 text-sm font-bold text-white shadow-glass summary-tone-${tone}`}
+                          style={toneStyle(tone)}
+                        >
+                          {index + 1}
                         </div>
-                        <div className="flex shrink-0 flex-col gap-2">
-                          {dataset.excelUrl ? (
-                            <Link
-                              href={dataset.excelUrl}
-                              className="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200/30 bg-emerald-300/18 px-3 py-2 text-xs font-bold text-emerald-50"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                              Excel
-                            </Link>
-                          ) : null}
-                          {dataset.pdfUrl ? (
-                            <Link
-                              href={dataset.pdfUrl}
-                              className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200/30 bg-amber-300/18 px-3 py-2 text-xs font-bold text-amber-50"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                              PDF
-                            </Link>
-                          ) : null}
-                        </div>
+                        <p className="text-lg font-semibold leading-8 text-white/86">
+                          {point}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -3664,4 +3639,14 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 1,
   }).format(value);
+}
+
+function normalizeDisplayText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
