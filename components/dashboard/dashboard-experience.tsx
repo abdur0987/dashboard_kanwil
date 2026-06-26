@@ -209,8 +209,7 @@ export function DashboardExperience({ data: initialData }: DashboardExperiencePr
                 <div className="flex items-end justify-between gap-3">
                   <div>
                     <p className="text-3xl font-bold text-slate-900">
-                      {formatNumber(indicator.value)}
-                      {indicator.unit === "persen" ? "%" : ""}
+                      {formatIndicatorValue(indicator)}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Tahun {indicator.year}
@@ -3712,9 +3711,19 @@ function Footer({ contact }: { contact: DashboardData["contact"] }) {
   );
 }
 
-function formatNumber(value: number) {
+function formatIndicatorValue(indicator: DashboardData["indicators"][number]) {
+  if (indicator.unit === "rasio") {
+    return `1:${formatNumber(indicator.value, 2)}`;
+  }
+
+  return `${formatNumber(indicator.value, indicator.unit === "persen" ? 2 : 1)}${
+    indicator.unit === "persen" ? "%" : ""
+  }`;
+}
+
+function formatNumber(value: number, maximumFractionDigits = 1) {
   return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 1,
+    maximumFractionDigits,
   }).format(value);
 }
 

@@ -96,6 +96,8 @@ const baseCategories = [
   "IPS",
 ];
 
+const derivedEducationCategory = "Pendidikan Madrasah";
+
 const lampungRegions = [
   "Kanwil Lampung",
   "Lampung Barat",
@@ -1108,8 +1110,13 @@ function IndicatorsPanel({
   onDelete: (id: number) => void;
   onUpdate: (id: number, patch: Partial<Indicator>) => void;
 }) {
-  const categoryOptions = normalizeCategoryOptions(categories);
-  const groupedIndicators = groupByCategory(indicators);
+  const categoryOptions = normalizeCategoryOptions(categories).filter(
+    (option) => option.value !== derivedEducationCategory,
+  );
+  const editableIndicators = indicators.filter(
+    (indicator) => indicator.category !== derivedEducationCategory,
+  );
+  const groupedIndicators = groupByCategory(editableIndicators);
 
   return (
     <Card className="overflow-hidden">
@@ -1118,7 +1125,7 @@ function IndicatorsPanel({
           <CardTitle>Manajemen Indikator Strategis</CardTitle>
           <CardDescription>
             Indikator dikelompokkan per kategori agar lebih mudah dipantau dan
-            diperbarui.
+            diperbarui. Pendidikan Madrasah dihitung otomatis dari dataset Excel.
           </CardDescription>
         </div>
         <Button onClick={onAdd}>
@@ -1257,12 +1264,15 @@ function RowsPanel({
   const [uploadSource, setUploadSource] = useState("Rekap IPS Kanwil Kemenag Lampung");
   const [uploadMessage, setUploadMessage] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const categoryOptions = normalizeCategoryOptions(categories);
+  const categoryOptions = normalizeCategoryOptions(categories).filter(
+    (option) => option.value !== derivedEducationCategory,
+  );
   const scoreCategoryOptions = [
     { label: "Otomatis / belum diisi", value: "" },
     ...ipsScoreCategoryOptions,
   ];
-  const groupedRows = groupByCategory(rows);
+  const editableRows = rows.filter((row) => row.category !== derivedEducationCategory);
+  const groupedRows = groupByCategory(editableRows);
 
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1315,7 +1325,8 @@ function RowsPanel({
           <CardTitle>Manajemen Data Tabel</CardTitle>
           <CardDescription>
             Data dikelompokkan per kategori dan bisa diperbarui lewat upload
-            DOCX, PDF, Excel, atau CSV.
+            DOCX, PDF, Excel, atau CSV. Pendidikan Madrasah diperbarui dari tab
+            Dataset & Rilis.
           </CardDescription>
         </div>
         <Button onClick={onAdd}>
