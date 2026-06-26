@@ -73,6 +73,7 @@ export const dashboardRows = sqliteTable("dashboard_rows", {
   value: real("value").notNull(),
   unit: text("unit").notNull(),
   source: text("source").notNull(),
+  scoreCategory: text("score_category").notNull().default(""),
 });
 
 export const chartSeries = sqliteTable("dashboard_chart_series", {

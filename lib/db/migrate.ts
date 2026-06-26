@@ -1,4 +1,4 @@
-import { executeSql } from "@/lib/db/client";
+import { executeSql, querySql } from "@/lib/db/client";
 
 let migrated = false;
 let migrationPromise: Promise<void> | null = null;
@@ -9,7 +9,8 @@ export async function ensureDatabaseReady() {
   }
 
   if (!migrationPromise) {
-    migrationPromise = executeSql(`
+    migrationPromise = (async () => {
+      await executeSql(`
     PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS user (
@@ -88,7 +89,8 @@ export async function ensureDatabaseReady() {
       year INTEGER NOT NULL,
       value REAL NOT NULL,
       unit TEXT NOT NULL,
-      source TEXT NOT NULL
+      source TEXT NOT NULL,
+      score_category TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS dashboard_chart_series (
@@ -218,10 +220,26 @@ export async function ensureDatabaseReady() {
     );
 
     CREATE INDEX IF NOT EXISTS dashboard_filters_kind_idx ON dashboard_filters(kind);
-  `).then(() => {
+  `);
+
+      await ensureColumn(
+        "dashboard_rows",
+        "score_category",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+
       migrated = true;
-    });
+    })();
   }
 
   await migrationPromise;
+}
+
+async function ensureColumn(tableName: string, columnName: string, columnSql: string) {
+  const columns = await querySql<{ name: string }>(`PRAGMA table_info(${tableName})`);
+  const hasColumn = columns.some((column) => column.name === columnName);
+
+  if (!hasColumn) {
+    await executeSql(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnSql};`);
+  }
 }

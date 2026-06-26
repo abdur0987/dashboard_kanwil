@@ -35,6 +35,15 @@ export async function executeSql(sql: string) {
   sqlite?.exec(sql);
 }
 
+export async function querySql<T = Record<string, unknown>>(sql: string) {
+  if (libsql) {
+    const result = await libsql.execute(sql);
+    return result.rows as T[];
+  }
+
+  return (sqlite?.prepare(sql).all() ?? []) as T[];
+}
+
 export { schema };
 
 function createLocalSqlite(filePath: string) {

@@ -1,10 +1,14 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import * as XLSX from "xlsx";
 
 import { db } from "@/lib/db/client";
 import { ensureDatabaseReady } from "@/lib/db/migrate";
+import {
+  formatIpsWorkUnit,
+  getIpsScoreCategory,
+} from "@/lib/ips";
 import {
   activities as activitiesTable,
   awardCollections as awardCollectionsTable,
@@ -28,6 +32,7 @@ import type {
   DashboardRow,
   DatasetDetail,
   ExecutiveSchedule,
+  Indicator,
   NewsItem,
   OfficeLocation,
   ReleaseSchedule,
@@ -373,9 +378,9 @@ export const seedDashboardData: DashboardData = {
         category: "IPS",
         unit: "indeks",
         source: "Rekap IPS Kanwil Kemenag Lampung",
-        year: 2026,
+        year: 2025,
         value: 3.1,
-        trend: 0.3,
+        trend: 0,
         status: "aktif",
       },
     ],
@@ -604,6 +609,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   ]);
 
   const normalizedRows = normalizeDashboardRows(rows);
+  const normalizedIndicators = applyDerivedIpsIndicator(indicators, normalizedRows);
   const chartSeries = mergeIpsChartSeries(toChartPoints(rawChartSeries), normalizedRows);
   const normalizedVideos = videos.map((video) => ({
     ...video,
@@ -653,10 +659,13 @@ export async function getDashboardData(): Promise<DashboardData> {
   const liveExecutiveSchedules = await getSimandaExecutiveSchedules(executiveSchedules);
   const latestNews = await getLampungLatestNews();
   const portalDatasets = getPortalDatasets(datasets);
-  const datasetDetails = getDatasetDetails(portalDatasets);
+  const datasetDetails = syncIpsDatasetDetails(
+    getDatasetDetails(portalDatasets),
+    normalizedRows,
+  );
 
   return {
-    indicators,
+    indicators: normalizedIndicators,
     rows: normalizedRows,
     chartSeries,
     executiveSchedules: liveExecutiveSchedules,
@@ -1325,9 +1334,22 @@ async function ensureIpsDataPresent() {
     const maxRowId = existingRows.reduce((max, row) => Math.max(max, row.id), 0);
     await db.insert(dashboardRowsTable).values(
       ipsRows.map((row, index) => ({
-        ...row,
+        ...normalizeDashboardRow(row),
         id: maxRowId + index + 1,
       })),
+    );
+  } else {
+    const rowsMissingCategory = existingRows.filter(
+      (row) => row.category === "IPS" && !row.scoreCategory,
+    );
+
+    await Promise.all(
+      rowsMissingCategory.map((row) =>
+        db
+          .update(dashboardRowsTable)
+          .set({ scoreCategory: getIpsScoreCategory(row.value) })
+          .where(eq(dashboardRowsTable.id, row.id)),
+      ),
     );
   }
 
@@ -1335,6 +1357,18 @@ async function ensureIpsDataPresent() {
   const hasIpsIndicator = existingIndicators.some(
     (indicator) => indicator.category === "IPS",
   );
+  const latestIpsRows = getLatestIpsRows(
+    (hasIpsRows ? existingRows : ipsRows).map(normalizeDashboardRow),
+  );
+  const ipsAverage = latestIpsRows.length
+    ? Number(
+        (
+          latestIpsRows.reduce((total, row) => total + row.value, 0) /
+          latestIpsRows.length
+        ).toFixed(2),
+      )
+    : 3.1;
+  const ipsYear = latestIpsRows[0]?.year ?? 2025;
 
   if (!hasIpsIndicator) {
     const maxIndicatorId = existingIndicators.reduce(
@@ -1350,9 +1384,9 @@ async function ensureIpsDataPresent() {
       category: "IPS",
       unit: "indeks",
       source: "Rekap IPS Kanwil Kemenag Lampung",
-      year: 2025,
-      value: 3.1,
-      trend: 0.3,
+      year: ipsYear,
+      value: ipsAverage,
+      trend: 0,
       status: "aktif",
     });
   }
@@ -1422,7 +1456,7 @@ async function clearDashboardTables() {
 
 async function insertDashboardData(data: DashboardData) {
   const indicators = data.indicators ?? [];
-  const rows = data.rows ?? [];
+  const rows = (data.rows ?? []).map(normalizeDashboardRow);
   const chartSeries = data.chartSeries ?? [];
   const executiveSchedules = data.executiveSchedules ?? [];
   const awardCollections = data.awardCollections ?? [];
@@ -1557,10 +1591,107 @@ function toChartPoints(
 }
 
 function normalizeDashboardRows(sourceRows: DashboardRow[]) {
+  const normalizedRows = sourceRows.map(normalizeDashboardRow);
+  const sourceIpsRows = normalizedRows.filter((row) => row.category === "IPS");
+
   return [
-    ...sourceRows.filter((row) => row.category !== "IPS"),
-    ...ipsRows,
+    ...normalizedRows.filter((row) => row.category !== "IPS"),
+    ...(sourceIpsRows.length ? sourceIpsRows : ipsRows.map(normalizeDashboardRow)),
   ];
+}
+
+function normalizeDashboardRow(row: DashboardRow): DashboardRow {
+  const scoreCategory =
+    row.scoreCategory?.trim() ||
+    (row.category === "IPS" ? getIpsScoreCategory(row.value) : "");
+
+  return {
+    ...row,
+    scoreCategory,
+  };
+}
+
+function applyDerivedIpsIndicator(indicators: Indicator[], sourceRows: DashboardRow[]) {
+  const ipsRowsForLatestYear = getLatestIpsRows(sourceRows);
+
+  if (!ipsRowsForLatestYear.length) return indicators;
+
+  const existingIndicator = indicators.find((indicator) => indicator.category === "IPS");
+  const average =
+    ipsRowsForLatestYear.reduce((total, row) => total + row.value, 0) /
+    ipsRowsForLatestYear.length;
+  const year = ipsRowsForLatestYear[0]?.year ?? existingIndicator?.year ?? 2025;
+  const nextIndicator: Indicator = {
+    id:
+      existingIndicator?.id ??
+      Math.max(0, ...indicators.map((indicator) => indicator.id)) + 1,
+    name: existingIndicator?.name ?? "Indeks Pembangunan Statistik",
+    description:
+      existingIndicator?.description ??
+      "Rekap nilai IPS kabupaten/kota sebagai gambaran tingkat kematangan statistik sektoral.",
+    category: "IPS",
+    unit: existingIndicator?.unit ?? ipsRowsForLatestYear[0]?.unit ?? "indeks",
+    source:
+      ipsRowsForLatestYear[0]?.source ??
+      existingIndicator?.source ??
+      "Rekap IPS Kanwil Kemenag Lampung",
+    year,
+    value: Number(average.toFixed(2)),
+    trend: existingIndicator?.trend ?? 0,
+    status: existingIndicator?.status ?? "aktif",
+  };
+
+  return [
+    ...indicators.filter((indicator) => indicator.category !== "IPS"),
+    nextIndicator,
+  ].sort((a, b) => a.id - b.id);
+}
+
+function getLatestIpsRows(sourceRows: DashboardRow[]) {
+  const rows = sourceRows.filter(
+    (row) => row.category === "IPS" && Number.isFinite(row.value),
+  );
+
+  if (!rows.length) return [];
+
+  const latestYear = Math.max(...rows.map((row) => row.year));
+  return rows.filter((row) => row.year === latestYear);
+}
+
+function syncIpsDatasetDetails(details: DatasetDetail[], sourceRows: DashboardRow[]) {
+  const latestIpsRows = getLatestIpsRows(sourceRows).map(normalizeDashboardRow);
+
+  if (!latestIpsRows.length) return details;
+
+  const latestYear = latestIpsRows[0]?.year ?? 2025;
+  const ipsTableRows = latestIpsRows.map((row, index) => [
+    index + 1,
+    formatIpsWorkUnit(row.region),
+    row.value,
+    row.scoreCategory || getIpsScoreCategory(row.value) || "-",
+    row.year,
+  ]);
+
+  return details.map((detail) => {
+    if (!isIpsDatasetDetail(detail)) return detail;
+
+    return {
+      ...detail,
+      year: latestYear,
+      headers: ["No", "Satuan Kerja", "Nilai", "Kategori", "Tahun"],
+      rows: ipsTableRows,
+      chartData: latestIpsRows.map((row) => ({
+        label: row.region,
+        value: row.value,
+      })),
+    };
+  });
+}
+
+function isIpsDatasetDetail(detail: DatasetDetail) {
+  return /ips|indeks pembangunan statistik/i.test(
+    `${detail.module} ${detail.category} ${detail.title}`,
+  );
 }
 
 function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow[]) {
@@ -1569,10 +1700,8 @@ function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow
     delete cleanPoint.IPS;
     return cleanPoint;
   });
-  const ipsValues = sourceRows
-    .filter((row) => row.category === "IPS" && row.year === 2025)
-    .map((row) => row.value)
-    .filter((value) => Number.isFinite(value));
+  const latestIpsRows = getLatestIpsRows(sourceRows);
+  const ipsValues = latestIpsRows.map((row) => row.value);
 
   if (!ipsValues.length) return withoutStaleIps;
 
@@ -1581,9 +1710,10 @@ function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow
   const chartByYear = new Map<number, ChartPoint>(
     withoutStaleIps.map((point) => [point.year, point]),
   );
-  const point2025 = chartByYear.get(2025) ?? ({ year: 2025 } as ChartPoint);
-  point2025.IPS = Number(ipsAverage.toFixed(2));
-  chartByYear.set(2025, point2025);
+  const latestYear = latestIpsRows[0]?.year ?? 2025;
+  const ipsPoint = chartByYear.get(latestYear) ?? ({ year: latestYear } as ChartPoint);
+  ipsPoint.IPS = Number(ipsAverage.toFixed(2));
+  chartByYear.set(latestYear, ipsPoint);
 
   return Array.from(chartByYear.values()).sort((a, b) => a.year - b.year);
 }

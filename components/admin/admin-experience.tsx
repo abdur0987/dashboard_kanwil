@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
+import { getIpsScoreCategory, ipsScoreCategoryOptions } from "@/lib/ips";
 import type {
   ActivitySlide,
   ContactInfo,
@@ -165,9 +166,13 @@ export function AdminExperience({ data }: AdminExperienceProps) {
     setAccountEmail(session.data.user.email);
   }, [session.data?.user]);
 
+  const syncedIndicators = useMemo(
+    () => syncIpsIndicators(indicators, rows),
+    [indicators, rows],
+  );
   const normalizedFilters = useMemo(
-    () => buildDashboardFilters(data.filters, indicators, rows),
-    [data.filters, indicators, rows],
+    () => buildDashboardFilters(data.filters, syncedIndicators, rows),
+    [data.filters, syncedIndicators, rows],
   );
   const normalizedChartSeries = useMemo(
     () => buildChartSeriesFromRows(rows, normalizedFilters.categories),
@@ -176,7 +181,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
 
   const snapshot = useMemo(
     () => ({
-      indicators,
+      indicators: syncedIndicators,
       rows,
       chartSeries: normalizedChartSeries,
       publications,
@@ -196,7 +201,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
       data.awardCollections,
       data.executiveSchedules,
       datasets,
-      indicators,
+      syncedIndicators,
       normalizedChartSeries,
       normalizedFilters,
       officeLocations,
@@ -209,12 +214,12 @@ export function AdminExperience({ data }: AdminExperienceProps) {
 
   const stats = useMemo(() => {
     const latestYear = rows.length ? Math.max(...rows.map((row) => row.year)) : "-";
-    const validationCount = indicators.filter(
+    const validationCount = syncedIndicators.filter(
       (indicator) => indicator.status === "perlu-validasi",
     ).length;
 
     return {
-      indicatorCount: indicators.length,
+      indicatorCount: syncedIndicators.length,
       rowCount: rows.length,
       publicationCount: publications.length,
       datasetCount: datasets.length,
@@ -227,11 +232,11 @@ export function AdminExperience({ data }: AdminExperienceProps) {
   }, [
     activities.length,
     datasets.length,
-    indicators,
     officeLocations.length,
     publications.length,
     releaseSchedules.length,
     rows,
+    syncedIndicators,
     videos.length,
   ]);
 
@@ -409,6 +414,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
         value: 0,
         unit: "persen",
         source: "Sumber Data",
+        scoreCategory: "",
       },
     ]);
   }
@@ -433,7 +439,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
       return [
         ...retained,
         ...importedRows.map((row, index) => ({
-          ...row,
+          ...normalizeAdminDashboardRow(row),
           id: startId + index,
         })),
       ];
@@ -664,7 +670,7 @@ export function AdminExperience({ data }: AdminExperienceProps) {
 
             {activeTab === "indicators" ? (
               <IndicatorsPanel
-                indicators={indicators}
+                indicators={syncedIndicators}
                 categories={normalizedFilters.categories}
                 onAdd={addIndicator}
                 onDelete={(id) =>
@@ -1252,6 +1258,10 @@ function RowsPanel({
   const [uploadMessage, setUploadMessage] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const categoryOptions = normalizeCategoryOptions(categories);
+  const scoreCategoryOptions = [
+    { label: "Otomatis / belum diisi", value: "" },
+    ...ipsScoreCategoryOptions,
+  ];
   const groupedRows = groupByCategory(rows);
 
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
@@ -1427,7 +1437,7 @@ function RowsPanel({
               {items.map((row) => (
                 <div
                   key={row.id}
-                  className="grid gap-3 rounded-md border border-white/70 bg-white/55 p-3 xl:grid-cols-[1.05fr_0.54fr_0.62fr_0.34fr_0.34fr_auto]"
+                  className="grid gap-3 rounded-md border border-white/70 bg-white/55 p-3 xl:grid-cols-[1.05fr_0.54fr_0.62fr_0.34fr_0.34fr_0.45fr_auto]"
                 >
                   <InputField
                     label="Indikator"
@@ -1438,7 +1448,13 @@ function RowsPanel({
                     label="Kategori"
                     value={row.category}
                     options={categoryOptions}
-                    onChange={(value) => onUpdate(row.id, { category: value })}
+                    onChange={(value) =>
+                      onUpdate(row.id, {
+                        category: value,
+                        scoreCategory:
+                          value === "IPS" ? getIpsScoreCategory(row.value) : "",
+                      })
+                    }
                   />
                   <Select
                     label="Wilayah"
@@ -1456,7 +1472,22 @@ function RowsPanel({
                     label="Nilai"
                     type="number"
                     value={row.value}
-                    onChange={(value) => onUpdate(row.id, { value: Number(value) })}
+                    onChange={(value) => {
+                      const nextValue = Number(value);
+                      onUpdate(row.id, {
+                        value: nextValue,
+                        scoreCategory:
+                          row.category === "IPS"
+                            ? getIpsScoreCategory(nextValue)
+                            : row.scoreCategory ?? "",
+                      });
+                    }}
+                  />
+                  <Select
+                    label="Kategori Nilai"
+                    value={row.scoreCategory ?? ""}
+                    options={scoreCategoryOptions}
+                    onChange={(value) => onUpdate(row.id, { scoreCategory: value })}
                   />
                   <div className="flex items-end justify-end">
                     <Button
@@ -2319,6 +2350,63 @@ function groupByCategory<T extends { category: string }>(items: T[]) {
   return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
 }
 
+function normalizeAdminDashboardRow<T extends Omit<DashboardRow, "id">>(
+  row: T,
+): T & { scoreCategory: string } {
+  return {
+    ...row,
+    scoreCategory:
+      row.scoreCategory?.trim() ||
+      (row.category === "IPS" ? getIpsScoreCategory(row.value) : ""),
+  };
+}
+
+function syncIpsIndicators(indicators: Indicator[], rows: DashboardRow[]) {
+  const latestIpsRows = getLatestAdminIpsRows(rows);
+
+  if (!latestIpsRows.length) return indicators;
+
+  const existingIndicator = indicators.find((indicator) => indicator.category === "IPS");
+  const average =
+    latestIpsRows.reduce((total, row) => total + row.value, 0) /
+    latestIpsRows.length;
+  const nextIndicator: Indicator = {
+    id:
+      existingIndicator?.id ??
+      Math.max(0, ...indicators.map((indicator) => indicator.id)) + 1,
+    name: existingIndicator?.name ?? "Indeks Pembangunan Statistik",
+    description:
+      existingIndicator?.description ??
+      "Rekap nilai IPS kabupaten/kota sebagai gambaran tingkat kematangan statistik sektoral.",
+    category: "IPS",
+    unit: existingIndicator?.unit ?? latestIpsRows[0]?.unit ?? "indeks",
+    source:
+      latestIpsRows[0]?.source ??
+      existingIndicator?.source ??
+      "Rekap IPS Kanwil Kemenag Lampung",
+    year: latestIpsRows[0]?.year ?? existingIndicator?.year ?? 2025,
+    value: Number(average.toFixed(2)),
+    trend: existingIndicator?.trend ?? 0,
+    status: existingIndicator?.status ?? "aktif",
+  };
+
+  return [
+    ...indicators.filter((indicator) => indicator.category !== "IPS"),
+    nextIndicator,
+  ].sort((a, b) => a.id - b.id);
+}
+
+function getLatestAdminIpsRows(rows: DashboardRow[]) {
+  const ipsRows = rows
+    .map(normalizeAdminDashboardRow)
+    .filter((row) => row.category === "IPS" && Number.isFinite(row.value));
+
+  if (!ipsRows.length) return [];
+
+  const latestYear = Math.max(...ipsRows.map((row) => row.year));
+  return ipsRows.filter((row) => row.year === latestYear);
+}
+
 function buildDashboardFilters(
   existing: DashboardData["filters"],
   indicators: Indicator[],
@@ -2342,9 +2430,9 @@ function buildDashboardFilters(
   ]);
 
   return {
-    years: ["Semua Tahun", ...years],
-    categories: ["Semua Kategori", ...categories],
-    regions: ["Semua Wilayah", ...regions],
+    years: uniqueValues(["Semua Tahun", ...years]),
+    categories: uniqueValues(["Semua Kategori", ...categories]),
+    regions: uniqueValues(["Semua Wilayah", ...regions]),
   };
 }
 

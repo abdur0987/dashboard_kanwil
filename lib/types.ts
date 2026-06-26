@@ -23,6 +23,7 @@ export type DashboardRow = {
   value: number;
   unit: string;
   source: string;
+  scoreCategory?: string;
 };
 
 export type ChartPoint = {
