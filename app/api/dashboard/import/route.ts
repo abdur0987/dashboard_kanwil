@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { getIpsScoreCategory, getIpsScoreCategoryFromText } from "@/lib/ips";
 import type { DashboardRow, Indicator } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -28,7 +29,7 @@ const lampungRegions = [
 type ImportedRecord = {
   region: string;
   value: number;
-  note?: string;
+  scoreCategory?: string;
 };
 
 export async function POST(request: Request) {
@@ -74,8 +75,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const rows: DashboardRow[] = extracted.map((record, index) => ({
-      id: index + 1,
+    const rows: Omit<DashboardRow, "id">[] = extracted.map((record) => ({
       indicator,
       category,
       region: record.region,
@@ -84,6 +84,10 @@ export async function POST(request: Request) {
       value: record.value,
       unit,
       source,
+      scoreCategory:
+        category === "IPS"
+          ? record.scoreCategory || getIpsScoreCategory(record.value)
+          : record.scoreCategory ?? "",
     }));
 
     const average =
@@ -194,7 +198,11 @@ function extractRecordsFromCells(values: string[][]): ImportedRecord[] {
     const value = findNumericValue(row);
 
     if (region && value !== null) {
-      records.push({ region, value });
+      records.push({
+        region,
+        value,
+        scoreCategory: getIpsScoreCategoryFromText(joined),
+      });
     }
   }
 
@@ -215,9 +223,12 @@ function extractRecordsFromText(text: string): ImportedRecord[] {
     );
 
     if (match?.[1]) {
+      const recordText = normalized.slice(match.index ?? 0, (match.index ?? 0) + 220);
+
       records.push({
         region,
         value: parseLocaleNumber(match[1]),
+        scoreCategory: getIpsScoreCategoryFromText(recordText),
       });
     }
   }
@@ -236,7 +247,11 @@ function extractRecordsFromText(text: string): ImportedRecord[] {
     const value = findNumericValue(lines.slice(index, index + 4));
 
     if (region && value !== null) {
-      records.push({ region, value });
+      records.push({
+        region,
+        value,
+        scoreCategory: getIpsScoreCategoryFromText(lines.slice(index, index + 5).join(" ")),
+      });
     }
   }
 
@@ -280,7 +295,13 @@ function findNumericValue(cells: string[]) {
 }
 
 function parseLocaleNumber(value: string) {
-  return Number(value.replace(/\./g, "").replace(",", "."));
+  const normalized = value.trim();
+
+  if (normalized.includes(",")) {
+    return Number(normalized.replace(/\./g, "").replace(",", "."));
+  }
+
+  return Number(normalized);
 }
 
 function normalizeRegionName(value: string) {

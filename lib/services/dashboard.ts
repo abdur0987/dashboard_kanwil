@@ -1,10 +1,14 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import * as XLSX from "xlsx";
 
 import { db } from "@/lib/db/client";
 import { ensureDatabaseReady } from "@/lib/db/migrate";
+import {
+  formatIpsWorkUnit,
+  getIpsScoreCategory,
+} from "@/lib/ips";
 import {
   activities as activitiesTable,
   awardCollections as awardCollectionsTable,
@@ -28,6 +32,7 @@ import type {
   DashboardRow,
   DatasetDetail,
   ExecutiveSchedule,
+  Indicator,
   NewsItem,
   OfficeLocation,
   ReleaseSchedule,
@@ -131,21 +136,19 @@ const ipsRows: DashboardRow[] = [
   { id: 115, indicator: "Nilai Indeks Pembangunan Statistik", category: "IPS", region: "Metro", period: "Tahunan", year: 2025, value: 2.825, unit: "indeks", source: "Rekap IPS Kanwil Kemenag Lampung" },
 ];
 
+const educationMadrasahCategory = "Pendidikan Madrasah";
+
 const rows: DashboardRow[] = [
   { id: 1, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Bandar Lampung", period: "Triwulan", year: 2026, value: 96.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
-  { id: 2, indicator: "Madrasah terakreditasi A/B", category: "Pendidikan Madrasah", region: "Lampung Tengah", period: "Tahunan", year: 2026, value: 88.2, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 3, indicator: "KUA dengan layanan digital aktif", category: "Bimas Islam", region: "Lampung Selatan", period: "Semester", year: 2026, value: 91.5, unit: "persen", source: "Bidang Bimas Islam" },
   { id: 4, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2026, value: 94.8, unit: "persen", source: "Bidang Ortala" },
   { id: 5, indicator: "Layanan pengaduan ditindaklanjuti", category: "Layanan Publik", region: "Pringsewu", period: "Triwulan", year: 2025, value: 92.1, unit: "persen", source: "Subbag Umum dan Humas" },
-  { id: 6, indicator: "Guru madrasah mengikuti pembinaan", category: "Pendidikan Madrasah", region: "Pesawaran", period: "Semester", year: 2025, value: 84.7, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 7, indicator: "Bimbingan keluarga sakinah terlaksana", category: "Bimas Islam", region: "Tulang Bawang Barat", period: "Tahunan", year: 2025, value: 78.9, unit: "persen", source: "Bidang Bimas Islam" },
   { id: 8, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2025, value: 86.5, unit: "persen", source: "Bidang Ortala" },
   { id: 9, indicator: "Kunjungan portal informasi Kanwil", category: "Layanan Publik", region: "Semua Wilayah", period: "Bulanan", year: 2024, value: 132.4, unit: "ribu", source: "Analytics Website Kanwil" },
-  { id: 10, indicator: "Madrasah memakai pelaporan digital", category: "Pendidikan Madrasah", region: "Mesuji", period: "Tahunan", year: 2024, value: 81.2, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 11, indicator: "KUA revitalisasi layanan", category: "Bimas Islam", region: "Bandar Lampung", period: "Tahunan", year: 2024, value: 75.6, unit: "persen", source: "Bidang Bimas Islam" },
   { id: 12, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2024, value: 82.3, unit: "persen", source: "Bidang Ortala" },
   { id: 13, indicator: "Layanan PTSP selesai tepat waktu", category: "Layanan Publik", region: "Semua Wilayah", period: "Tahunan", year: 2023, value: 87.4, unit: "persen", source: "PTSP Kanwil Kemenag Lampung" },
-  { id: 14, indicator: "Madrasah terakreditasi A/B", category: "Pendidikan Madrasah", region: "Metro", period: "Tahunan", year: 2023, value: 79.9, unit: "persen", source: "Bidang Pendidikan Madrasah" },
   { id: 15, indicator: "KUA dengan layanan digital aktif", category: "Bimas Islam", region: "Pesawaran", period: "Tahunan", year: 2023, value: 72.8, unit: "persen", source: "Bidang Bimas Islam" },
   { id: 16, indicator: "Dokumen Laporan SPAK", category: "SPAK", region: "Kanwil Lampung", period: "Tahunan", year: 2023, value: 80.1, unit: "persen", source: "Bidang Ortala" },
   ...ipsRows,
@@ -330,18 +333,6 @@ export const seedDashboardData: DashboardData = {
         status: "aktif",
       },
       {
-        id: 2,
-        name: "Kinerja Pendidikan Madrasah",
-        description: "Capaian akreditasi, pembinaan, dan pelaporan digital madrasah di Provinsi Lampung.",
-        category: "Pendidikan Madrasah",
-        unit: "persen",
-        source: "Bidang Pendidikan Madrasah",
-        year: 2026,
-        value: 88.2,
-        trend: 3.5,
-        status: "aktif",
-      },
-      {
         id: 3,
         name: "Layanan Bimas Islam",
         description: "Pemantauan layanan KUA, bimbingan keluarga, dan program keagamaan masyarakat.",
@@ -373,18 +364,18 @@ export const seedDashboardData: DashboardData = {
         category: "IPS",
         unit: "indeks",
         source: "Rekap IPS Kanwil Kemenag Lampung",
-        year: 2026,
+        year: 2025,
         value: 3.1,
-        trend: 0.3,
+        trend: 0,
         status: "aktif",
       },
     ],
     rows,
     chartSeries: [
-      { year: 2023, "Pendidikan Madrasah": 79.9, "Bimas Islam": 72.8, "SPAK": 80.1, "Layanan Publik": 87.4, IPS: 0 },
-      { year: 2024, "Pendidikan Madrasah": 81.2, "Bimas Islam": 75.6, "SPAK": 82.3, "Layanan Publik": 92.4, IPS: 0 },
-      { year: 2025, "Pendidikan Madrasah": 84.7, "Bimas Islam": 78.9, "SPAK": 86.5, "Layanan Publik": 92.1, IPS: 3.1 },
-      { year: 2026, "Pendidikan Madrasah": 88.2, "Bimas Islam": 91.5, "SPAK": 94.8, "Layanan Publik": 96.4 },
+      { year: 2023, "Bimas Islam": 72.8, "SPAK": 80.1, "Layanan Publik": 87.4, IPS: 0 },
+      { year: 2024, "Bimas Islam": 75.6, "SPAK": 82.3, "Layanan Publik": 92.4, IPS: 0 },
+      { year: 2025, "Bimas Islam": 78.9, "SPAK": 86.5, "Layanan Publik": 92.1, IPS: 3.1 },
+      { year: 2026, "Bimas Islam": 91.5, "SPAK": 94.8, "Layanan Publik": 96.4 },
     ],
     executiveSchedules: [
       {
@@ -556,9 +547,11 @@ export const seedDashboardData: DashboardData = {
 };
 
 let seedPromise: Promise<void> | null = null;
+let manualEducationCleanupPromise: Promise<void> | null = null;
 
 export async function getDashboardData(): Promise<DashboardData> {
   await ensureDashboardSeeded();
+  await ensureManualEducationDataRemoved();
   const [
     indicators,
     rows,
@@ -604,7 +597,10 @@ export async function getDashboardData(): Promise<DashboardData> {
   ]);
 
   const normalizedRows = normalizeDashboardRows(rows);
-  const chartSeries = mergeIpsChartSeries(toChartPoints(rawChartSeries), normalizedRows);
+  const chartSeries = mergeIpsChartSeries(
+    removeManualEducationChartSeries(toChartPoints(rawChartSeries)),
+    normalizedRows,
+  );
   const normalizedVideos = videos.map((video) => ({
     ...video,
     embedUrl: normalizeYouTubeEmbedUrl(video.embedUrl),
@@ -653,10 +649,17 @@ export async function getDashboardData(): Promise<DashboardData> {
   const liveExecutiveSchedules = await getSimandaExecutiveSchedules(executiveSchedules);
   const latestNews = await getLampungLatestNews();
   const portalDatasets = getPortalDatasets(datasets);
-  const datasetDetails = getDatasetDetails(portalDatasets);
+  const datasetDetails = syncIpsDatasetDetails(
+    getDatasetDetails(portalDatasets),
+    normalizedRows,
+  );
+  const normalizedIndicators = applyEducationMadrasahIndicators(
+    applyDerivedIpsIndicator(indicators, normalizedRows),
+    datasetDetails,
+  );
 
   return {
-    indicators,
+    indicators: normalizedIndicators,
     rows: normalizedRows,
     chartSeries,
     executiveSchedules: liveExecutiveSchedules,
@@ -1325,9 +1328,22 @@ async function ensureIpsDataPresent() {
     const maxRowId = existingRows.reduce((max, row) => Math.max(max, row.id), 0);
     await db.insert(dashboardRowsTable).values(
       ipsRows.map((row, index) => ({
-        ...row,
+        ...normalizeDashboardRow(row),
         id: maxRowId + index + 1,
       })),
+    );
+  } else {
+    const rowsMissingCategory = existingRows.filter(
+      (row) => row.category === "IPS" && !row.scoreCategory,
+    );
+
+    await Promise.all(
+      rowsMissingCategory.map((row) =>
+        db
+          .update(dashboardRowsTable)
+          .set({ scoreCategory: getIpsScoreCategory(row.value) })
+          .where(eq(dashboardRowsTable.id, row.id)),
+      ),
     );
   }
 
@@ -1335,6 +1351,18 @@ async function ensureIpsDataPresent() {
   const hasIpsIndicator = existingIndicators.some(
     (indicator) => indicator.category === "IPS",
   );
+  const latestIpsRows = getLatestIpsRows(
+    (hasIpsRows ? existingRows : ipsRows).map(normalizeDashboardRow),
+  );
+  const ipsAverage = latestIpsRows.length
+    ? Number(
+        (
+          latestIpsRows.reduce((total, row) => total + row.value, 0) /
+          latestIpsRows.length
+        ).toFixed(2),
+      )
+    : 3.1;
+  const ipsYear = latestIpsRows[0]?.year ?? 2025;
 
   if (!hasIpsIndicator) {
     const maxIndicatorId = existingIndicators.reduce(
@@ -1350,9 +1378,9 @@ async function ensureIpsDataPresent() {
       category: "IPS",
       unit: "indeks",
       source: "Rekap IPS Kanwil Kemenag Lampung",
-      year: 2025,
-      value: 3.1,
-      trend: 0.3,
+      year: ipsYear,
+      value: ipsAverage,
+      trend: 0,
       status: "aktif",
     });
   }
@@ -1421,9 +1449,13 @@ async function clearDashboardTables() {
 }
 
 async function insertDashboardData(data: DashboardData) {
-  const indicators = data.indicators ?? [];
-  const rows = data.rows ?? [];
-  const chartSeries = data.chartSeries ?? [];
+  const indicators = (data.indicators ?? []).filter(
+    (indicator) => !isEducationMadrasahCategory(indicator.category),
+  );
+  const rows = (data.rows ?? [])
+    .map(normalizeDashboardRow)
+    .filter((row) => !isEducationMadrasahCategory(row.category));
+  const chartSeries = removeManualEducationChartSeries(data.chartSeries ?? []);
   const executiveSchedules = data.executiveSchedules ?? [];
   const awardCollections = data.awardCollections ?? [];
   const publications = data.publications ?? [];
@@ -1538,6 +1570,24 @@ async function insertDashboardData(data: DashboardData) {
   }
 }
 
+async function ensureManualEducationDataRemoved() {
+  if (!manualEducationCleanupPromise) {
+    manualEducationCleanupPromise = (async () => {
+      await db
+        .delete(dashboardRowsTable)
+        .where(eq(dashboardRowsTable.category, educationMadrasahCategory));
+      await db
+        .delete(indicatorsTable)
+        .where(eq(indicatorsTable.category, educationMadrasahCategory));
+      await db
+        .delete(chartSeriesTable)
+        .where(eq(chartSeriesTable.category, educationMadrasahCategory));
+    })();
+  }
+
+  return manualEducationCleanupPromise;
+}
+
 function toChartPoints(
   rawChartSeries: {
     year: number;
@@ -1557,10 +1607,320 @@ function toChartPoints(
 }
 
 function normalizeDashboardRows(sourceRows: DashboardRow[]) {
+  const normalizedRows = sourceRows.map(normalizeDashboardRow);
+  const sourceIpsRows = normalizedRows.filter((row) => row.category === "IPS");
+  const manualRows = normalizedRows.filter(
+    (row) => row.category !== "IPS" && !isEducationMadrasahCategory(row.category),
+  );
+
   return [
-    ...sourceRows.filter((row) => row.category !== "IPS"),
-    ...ipsRows,
+    ...manualRows,
+    ...(sourceIpsRows.length ? sourceIpsRows : ipsRows.map(normalizeDashboardRow)),
   ];
+}
+
+function normalizeDashboardRow(row: DashboardRow): DashboardRow {
+  const scoreCategory =
+    row.scoreCategory?.trim() ||
+    (row.category === "IPS" ? getIpsScoreCategory(row.value) : "");
+
+  return {
+    ...row,
+    scoreCategory,
+  };
+}
+
+function applyDerivedIpsIndicator(indicators: Indicator[], sourceRows: DashboardRow[]) {
+  const ipsRowsForLatestYear = getLatestIpsRows(sourceRows);
+
+  if (!ipsRowsForLatestYear.length) return indicators;
+
+  const existingIndicator = indicators.find((indicator) => indicator.category === "IPS");
+  const average =
+    ipsRowsForLatestYear.reduce((total, row) => total + row.value, 0) /
+    ipsRowsForLatestYear.length;
+  const year = ipsRowsForLatestYear[0]?.year ?? existingIndicator?.year ?? 2025;
+  const nextIndicator: Indicator = {
+    id:
+      existingIndicator?.id ??
+      Math.max(0, ...indicators.map((indicator) => indicator.id)) + 1,
+    name: existingIndicator?.name ?? "Indeks Pembangunan Statistik",
+    description:
+      existingIndicator?.description ??
+      "Rekap nilai IPS kabupaten/kota sebagai gambaran tingkat kematangan statistik sektoral.",
+    category: "IPS",
+    unit: existingIndicator?.unit ?? ipsRowsForLatestYear[0]?.unit ?? "indeks",
+    source:
+      ipsRowsForLatestYear[0]?.source ??
+      existingIndicator?.source ??
+      "Rekap IPS Kanwil Kemenag Lampung",
+    year,
+    value: Number(average.toFixed(2)),
+    trend: existingIndicator?.trend ?? 0,
+    status: existingIndicator?.status ?? "aktif",
+  };
+
+  return [
+    ...indicators.filter((indicator) => indicator.category !== "IPS"),
+    nextIndicator,
+  ].sort((a, b) => a.id - b.id);
+}
+
+function applyEducationMadrasahIndicators(
+  indicators: Indicator[],
+  details: DatasetDetail[],
+) {
+  const manualIndicators = indicators.filter(
+    (indicator) => !isEducationMadrasahCategory(indicator.category),
+  );
+  const nextId = Math.max(0, ...manualIndicators.map((indicator) => indicator.id)) + 1;
+  const metrics = deriveEducationMadrasahMetrics(details, nextId);
+
+  if (!metrics) return manualIndicators;
+
+  const insertAfterIndex = manualIndicators.findIndex(
+    (indicator) => indicator.category === "Layanan Publik",
+  );
+  const nextIndicators = [...manualIndicators];
+  const insertAt = insertAfterIndex >= 0 ? insertAfterIndex + 1 : nextIndicators.length;
+
+  nextIndicators.splice(insertAt, 0, ...metrics);
+
+  return nextIndicators;
+}
+
+function deriveEducationMadrasahMetrics(
+  details: DatasetDetail[],
+  firstIndicatorId: number,
+): Indicator[] | null {
+  const educationDetails = details.filter((detail) =>
+    /pendidikan agama islam|pendidikan madrasah/i.test(
+      `${detail.category} ${detail.producer}`,
+    ),
+  );
+
+  if (!educationDetails.length) return null;
+
+  const accreditationTables = findDetailsByTableNumbers(educationDetails, [
+    "4.8",
+    "4.9",
+    "4.10",
+    "4.11",
+  ]);
+  const qualificationTables = findDetailsByTableNumbers(educationDetails, [
+    "4.14",
+    "4.17",
+    "4.20",
+    "4.23",
+  ]);
+  const certificationTables = findDetailsByTableNumbers(educationDetails, [
+    "4.15",
+    "4.18",
+    "4.21",
+    "4.24",
+  ]);
+  const studentTables = findDetailsByTableNumbers(educationDetails, [
+    "4.25",
+    "4.26",
+    "4.33",
+    "4.40",
+  ]);
+
+  const accredited = sumTotalColumns(accreditationTables, ["A", "B", "C"]);
+  const totalMadrasah = sumTotalColumns(accreditationTables, ["Jumlah"]);
+  const certifiedTeachers = sumTotalColumns(certificationTables, ["Sudah"]);
+  const teacherTotal = sumTotalColumns(qualificationTables, ["Jumlah"]);
+  const qualifiedTeachers = sumTotalColumns(qualificationTables, ["S1", "S2"]);
+  const studentTotal = sumTotalColumns(studentTables, ["Jumlah"]);
+
+  if (!totalMadrasah || !teacherTotal || !studentTotal) return null;
+
+  const year = getLatestDatasetYear(educationDetails);
+  const source = getEducationMadrasahSource(educationDetails);
+
+  return [
+    {
+      id: firstIndicatorId,
+      name: "Akreditasi madrasah",
+      description:
+        "Persentase madrasah terakreditasi A, B, dan C dari total madrasah RA/MI/MTs/MA.",
+      category: educationMadrasahCategory,
+      unit: "persen",
+      source,
+      year,
+      value: percentage(accredited, totalMadrasah),
+      trend: 0,
+      status: "aktif",
+    },
+    {
+      id: firstIndicatorId + 1,
+      name: "Guru bersertifikat",
+      description:
+        "Persentase guru madrasah yang sudah memiliki sertifikasi pendidik.",
+      category: educationMadrasahCategory,
+      unit: "persen",
+      source,
+      year,
+      value: percentage(certifiedTeachers, teacherTotal),
+      trend: 0,
+      status: "aktif",
+    },
+    {
+      id: firstIndicatorId + 2,
+      name: "Kualifikasi guru",
+      description:
+        "Persentase guru madrasah berkualifikasi S1 dan S2 dari total guru.",
+      category: educationMadrasahCategory,
+      unit: "persen",
+      source,
+      year,
+      value: percentage(qualifiedTeachers, teacherTotal),
+      trend: 0,
+      status: "aktif",
+    },
+    {
+      id: firstIndicatorId + 3,
+      name: "Rasio guru-siswa",
+      description:
+        "Rasio rata-rata jumlah siswa yang dilayani oleh satu guru madrasah.",
+      category: educationMadrasahCategory,
+      unit: "rasio",
+      source,
+      year,
+      value: Number((studentTotal / teacherTotal).toFixed(2)),
+      trend: 0,
+      status: "aktif",
+    },
+  ];
+}
+
+function findDetailsByTableNumbers(details: DatasetDetail[], tableNumbers: string[]) {
+  const selected = details.filter((detail) => tableNumbers.includes(detail.tableNumber));
+
+  if (selected.length) return selected;
+
+  return details.filter((detail) =>
+    tableNumbers.some((tableNumber) => detail.id.endsWith(tableNumber.replaceAll(".", "-"))),
+  );
+}
+
+function sumTotalColumns(details: DatasetDetail[], headerNames: string[]) {
+  return details.reduce((total, detail) => {
+    const totalRow = findTotalRow(detail.rows);
+
+    if (!totalRow) return total;
+
+    return (
+      total +
+      headerNames.reduce((columnTotal, headerName) => {
+        const columnIndex = findExactHeaderIndex(detail.headers, headerName);
+        const value =
+          columnIndex === undefined ? null : toNumber(totalRow[columnIndex]);
+
+        return columnTotal + (value ?? 0);
+      }, 0)
+    );
+  }, 0);
+}
+
+function findTotalRow(rows: (string | number)[][]) {
+  return (
+    rows.find((row) =>
+      row.some((cell) => ["jumlah", "total"].includes(String(cell).trim().toLowerCase())),
+    ) ?? rows.at(-1)
+  );
+}
+
+function findExactHeaderIndex(headers: string[], headerName: string) {
+  const normalizedName = normalizeHeaderName(headerName);
+  const index = headers.findIndex(
+    (header) => normalizeHeaderName(header) === normalizedName,
+  );
+
+  return index >= 0 ? index : undefined;
+}
+
+function normalizeHeaderName(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function percentage(numerator: number, denominator: number) {
+  return denominator ? Number(((numerator / denominator) * 100).toFixed(2)) : 0;
+}
+
+function getLatestDatasetYear(details: DatasetDetail[]) {
+  const years = details
+    .map((detail) => detail.year)
+    .filter((year) => Number.isFinite(year));
+
+  return years.length ? Math.max(...years) : 2026;
+}
+
+function getEducationMadrasahSource(details: DatasetDetail[]) {
+  const producer = details.find((detail) => detail.producer)?.producer;
+
+  return producer || "Dataset Pendidikan Agama Islam Kanwil Kemenag Lampung";
+}
+
+function isEducationMadrasahCategory(category: string) {
+  return category === educationMadrasahCategory;
+}
+
+function removeManualEducationChartSeries(chartSeries: ChartPoint[]) {
+  return chartSeries.map((chartPoint) => {
+    const point = { ...chartPoint };
+
+    delete point[educationMadrasahCategory];
+
+    return point;
+  });
+}
+
+function getLatestIpsRows(sourceRows: DashboardRow[]) {
+  const rows = sourceRows.filter(
+    (row) => row.category === "IPS" && Number.isFinite(row.value),
+  );
+
+  if (!rows.length) return [];
+
+  const latestYear = Math.max(...rows.map((row) => row.year));
+  return rows.filter((row) => row.year === latestYear);
+}
+
+function syncIpsDatasetDetails(details: DatasetDetail[], sourceRows: DashboardRow[]) {
+  const latestIpsRows = getLatestIpsRows(sourceRows).map(normalizeDashboardRow);
+
+  if (!latestIpsRows.length) return details;
+
+  const latestYear = latestIpsRows[0]?.year ?? 2025;
+  const ipsTableRows = latestIpsRows.map((row, index) => [
+    index + 1,
+    formatIpsWorkUnit(row.region),
+    row.value,
+    row.scoreCategory || getIpsScoreCategory(row.value) || "-",
+    row.year,
+  ]);
+
+  return details.map((detail) => {
+    if (!isIpsDatasetDetail(detail)) return detail;
+
+    return {
+      ...detail,
+      year: latestYear,
+      headers: ["No", "Satuan Kerja", "Nilai", "Kategori", "Tahun"],
+      rows: ipsTableRows,
+      chartData: latestIpsRows.map((row) => ({
+        label: row.region,
+        value: row.value,
+      })),
+    };
+  });
+}
+
+function isIpsDatasetDetail(detail: DatasetDetail) {
+  return /ips|indeks pembangunan statistik/i.test(
+    `${detail.module} ${detail.category} ${detail.title}`,
+  );
 }
 
 function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow[]) {
@@ -1569,10 +1929,8 @@ function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow
     delete cleanPoint.IPS;
     return cleanPoint;
   });
-  const ipsValues = sourceRows
-    .filter((row) => row.category === "IPS" && row.year === 2025)
-    .map((row) => row.value)
-    .filter((value) => Number.isFinite(value));
+  const latestIpsRows = getLatestIpsRows(sourceRows);
+  const ipsValues = latestIpsRows.map((row) => row.value);
 
   if (!ipsValues.length) return withoutStaleIps;
 
@@ -1581,9 +1939,10 @@ function mergeIpsChartSeries(chartSeries: ChartPoint[], sourceRows: DashboardRow
   const chartByYear = new Map<number, ChartPoint>(
     withoutStaleIps.map((point) => [point.year, point]),
   );
-  const point2025 = chartByYear.get(2025) ?? ({ year: 2025 } as ChartPoint);
-  point2025.IPS = Number(ipsAverage.toFixed(2));
-  chartByYear.set(2025, point2025);
+  const latestYear = latestIpsRows[0]?.year ?? 2025;
+  const ipsPoint = chartByYear.get(latestYear) ?? ({ year: latestYear } as ChartPoint);
+  ipsPoint.IPS = Number(ipsAverage.toFixed(2));
+  chartByYear.set(latestYear, ipsPoint);
 
   return Array.from(chartByYear.values()).sort((a, b) => a.year - b.year);
 }

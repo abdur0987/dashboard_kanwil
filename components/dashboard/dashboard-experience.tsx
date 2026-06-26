@@ -73,6 +73,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AiAssistant } from "@/components/dashboard/ai-assistant";
+import { ipsScoreCategoryRules } from "@/lib/ips";
 import type { DashboardData, DatasetDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -208,8 +209,7 @@ export function DashboardExperience({ data: initialData }: DashboardExperiencePr
                 <div className="flex items-end justify-between gap-3">
                   <div>
                     <p className="text-3xl font-bold text-slate-900">
-                      {formatNumber(indicator.value)}
-                      {indicator.unit === "persen" ? "%" : ""}
+                      {formatIndicatorValue(indicator)}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Tahun {indicator.year}
@@ -605,6 +605,12 @@ function getDataPortalModules(details: DatasetDetail[]) {
   ];
 }
 
+function isIpsDatasetDetail(detail: DatasetDetail) {
+  return /ips|indeks pembangunan statistik/i.test(
+    `${detail.module} ${detail.category} ${detail.title}`,
+  );
+}
+
 const lampungRegionAliases: Record<string, string> = {
   "lampung barat": "Lampung Barat",
   "lampung selatan": "Lampung Selatan",
@@ -701,26 +707,52 @@ function isNumericColumn(header: string, rows: DatasetDetail["rows"], index: num
   );
 }
 
-function datasetColumnClass(header: string, rows: DatasetDetail["rows"], index: number) {
+function datasetColumnClass(
+  header: string,
+  rows: DatasetDetail["rows"],
+  index: number,
+  columnCount = 0,
+) {
   const normalized = header.toLowerCase();
+  const compact = columnCount > 0 && columnCount <= 6;
 
   if (isNoColumn(header, index)) {
-    return "w-14 min-w-14 max-w-16 px-3 text-center";
+    return compact
+      ? "w-14 min-w-14 px-3 text-center"
+      : "w-14 min-w-14 max-w-16 px-3 text-center";
   }
 
   if (/tahun|year/.test(normalized)) {
-    return "w-24 min-w-24 max-w-28 px-3 text-center";
+    return compact
+      ? "w-24 min-w-24 px-3 text-center"
+      : "w-24 min-w-24 max-w-28 px-3 text-center";
+  }
+
+  if (/luas|jumlah|total/.test(normalized)) {
+    return compact
+      ? "w-32 min-w-32 px-3 text-right tabular-nums"
+      : "w-32 min-w-32 max-w-40 px-4 text-right tabular-nums";
   }
 
   if (isNumericColumn(header, rows, index)) {
-    return "w-28 min-w-28 max-w-32 px-3 text-right";
+    return compact
+      ? "w-28 min-w-24 px-3 text-right tabular-nums"
+      : "w-28 min-w-28 max-w-32 px-3 text-right";
+  }
+
+  if (/kategori|predikat|status/.test(normalized)) {
+    return compact
+      ? "w-36 min-w-32 px-3 text-center"
+      : "min-w-[140px] max-w-[220px] px-4 text-center";
   }
 
   if (/satuan kerja|nama|wilayah|provinsi|kabupaten|kota|kantor/.test(normalized)) {
-    return "min-w-[220px] max-w-[360px] px-4";
+    return compact
+      ? "w-[42%] min-w-[260px] px-4"
+      : "min-w-[220px] max-w-[360px] px-4";
   }
 
-  return "min-w-[120px] max-w-[240px] px-4";
+  return compact ? "w-36 min-w-28 px-3" : "min-w-[120px] max-w-[240px] px-4";
 }
 
 function DatasetPortal({
@@ -895,6 +927,7 @@ function DatasetPortal({
                     {selectedRows.length} dari {selectedDetail.rows.length} baris
                   </Badge>
                 </div>
+                {isIpsDatasetDetail(selectedDetail) ? <IpsCategoryLegend /> : null}
                 <div className="overflow-hidden rounded-lg border border-emerald-100 bg-white/80">
                   <div className="max-h-[760px] overflow-auto">
                     <DatasetSourceTable detail={selectedDetail} rows={selectedRows} />
@@ -1066,6 +1099,25 @@ function DatasetPortal({
   );
 }
 
+function IpsCategoryLegend() {
+  return (
+    <div className="mb-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-4 text-sm text-slate-700">
+      <p className="font-bold text-emerald-950">Keterangan kategori nilai IPS</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {ipsScoreCategoryRules.map((rule) => (
+          <div key={rule.label} className="flex items-start gap-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-700" />
+            <p className="leading-6">
+              <span className="font-semibold text-slate-900">{rule.label}</span>
+              <span className="text-slate-500">: {rule.range}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DatasetSourceTable({
   detail,
   rows,
@@ -1076,17 +1128,36 @@ function DatasetSourceTable({
   const sourceRows = rows ?? detail.rows;
   if (!sourceRows.length) return <EmptyState />;
   const visibleRows = sourceRows.slice(0, 500);
+  const isCompactTable = detail.headers.length <= 6;
+  const compactTableWidth =
+    detail.headers.length >= 6
+      ? "min-w-[820px]"
+      : detail.headers.length >= 5
+        ? "min-w-[680px]"
+        : "min-w-[560px]";
 
   return (
-    <Table className="w-full min-w-max table-auto text-sm">
+    <Table
+      className={cn(
+        "text-sm",
+        isCompactTable
+          ? `w-full ${compactTableWidth} table-fixed`
+          : "w-full min-w-max table-auto",
+      )}
+    >
       <TableHeader>
         <TableRow className="border-emerald-100 bg-gradient-to-r from-emerald-50/95 via-cyan-50/80 to-white/95">
           {detail.headers.map((header, index) => (
             <TableHead
               key={`${header}-${index}`}
               className={cn(
-                "sticky top-0 z-10 bg-emerald-50/95 py-4 font-bold text-emerald-950",
-                datasetColumnClass(String(header ?? ""), sourceRows, index),
+                "sticky top-0 z-10 bg-emerald-50/95 py-3 font-bold text-emerald-950",
+                datasetColumnClass(
+                  String(header ?? ""),
+                  sourceRows,
+                  index,
+                  detail.headers.length,
+                ),
               )}
             >
               {header || `Kolom ${index + 1}`}
@@ -1105,7 +1176,12 @@ function DatasetSourceTable({
                 key={`${detail.id}-${rowIndex}-${cellIndex}`}
                 className={cn(
                   "whitespace-normal py-3 align-top leading-6 text-slate-800",
-                  datasetColumnClass(String(header ?? ""), sourceRows, cellIndex),
+                  datasetColumnClass(
+                    String(header ?? ""),
+                    sourceRows,
+                    cellIndex,
+                    detail.headers.length,
+                  ),
                 )}
               >
                 {String(row[cellIndex] ?? "-")}
@@ -3635,9 +3711,19 @@ function Footer({ contact }: { contact: DashboardData["contact"] }) {
   );
 }
 
-function formatNumber(value: number) {
+function formatIndicatorValue(indicator: DashboardData["indicators"][number]) {
+  if (indicator.unit === "rasio") {
+    return `1:${formatNumber(indicator.value, 2)}`;
+  }
+
+  return `${formatNumber(indicator.value, indicator.unit === "persen" ? 2 : 1)}${
+    indicator.unit === "persen" ? "%" : ""
+  }`;
+}
+
+function formatNumber(value: number, maximumFractionDigits = 1) {
   return new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 1,
+    maximumFractionDigits,
   }).format(value);
 }
 
