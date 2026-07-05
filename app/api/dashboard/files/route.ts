@@ -9,7 +9,19 @@ import { auth } from "@/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const allowedExtensions = new Set(["pdf", "doc", "docx", "xlsx", "xls", "csv"]);
+const allowedExtensions = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "xlsx",
+  "xls",
+  "csv",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+]);
 
 export async function POST(request: Request) {
   const session = await auth.api.getSession({

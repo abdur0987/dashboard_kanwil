@@ -36,6 +36,8 @@ import { Select } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
 import type {
   ActivitySlide,
+  AwardCollection,
+  AwardItem,
   ContactInfo,
   DataCatalog,
   DashboardData,
@@ -138,6 +140,9 @@ export function AdminExperience({ data }: AdminExperienceProps) {
   );
   const [activities, setActivities] = useState<ActivitySlide[]>(data.activities);
   const [videos, setVideos] = useState<VideoItem[]>(data.videos);
+  const [awardCollections, setAwardCollections] = useState<AwardCollection[]>(
+    data.awardCollections,
+  );
   const [contact, setContact] = useState<ContactInfo>(data.contact);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [authName, setAuthName] = useState("Admin Kanwil");
@@ -186,14 +191,14 @@ export function AdminExperience({ data }: AdminExperienceProps) {
       activities,
       videos,
       executiveSchedules: data.executiveSchedules,
-      awardCollections: data.awardCollections,
+      awardCollections,
       contact,
       filters: normalizedFilters,
     }),
     [
       activities,
+      awardCollections,
       contact,
-      data.awardCollections,
       data.executiveSchedules,
       datasets,
       indicators,
@@ -551,6 +556,89 @@ export function AdminExperience({ data }: AdminExperienceProps) {
     ]);
   }
 
+  function addAwardCollection() {
+    setAwardCollections((current) => [
+      ...current,
+      {
+        id: `koleksi-${current.length + 1}-${Date.now()}`,
+        title: "Koleksi Penghargaan Baru",
+        description: "Deskripsi singkat koleksi penghargaan.",
+        items: [],
+      },
+    ]);
+  }
+
+  function addAwardItem(collectionId: string) {
+    setAwardCollections((current) =>
+      current.map((collection) => {
+        if (collection.id !== collectionId) return collection;
+
+        const nextId = nextNumericId(collection.items);
+
+        return {
+          ...collection,
+          items: [
+            ...collection.items,
+            {
+              id: nextId,
+              title: "Penghargaan Baru",
+              description: "Deskripsi singkat penghargaan.",
+              year: new Date().getFullYear(),
+              imageUrl: "",
+              alt: "Foto penghargaan Kanwil Kemenag Provinsi Lampung",
+            },
+          ],
+        };
+      }),
+    );
+  }
+
+  function updateAwardCollection(id: string, patch: Partial<AwardCollection>) {
+    setAwardCollections((current) =>
+      current.map((collection) =>
+        collection.id === id ? { ...collection, ...patch } : collection,
+      ),
+    );
+  }
+
+  function updateAwardItem(
+    collectionId: string,
+    itemId: number,
+    patch: Partial<AwardItem>,
+  ) {
+    setAwardCollections((current) =>
+      current.map((collection) =>
+        collection.id === collectionId
+          ? {
+              ...collection,
+              items: collection.items.map((item) =>
+                item.id === itemId ? { ...item, ...patch } : item,
+              ),
+            }
+          : collection,
+      ),
+    );
+  }
+
+  function deleteAwardCollection(id: string) {
+    setAwardCollections((current) =>
+      current.filter((collection) => collection.id !== id),
+    );
+  }
+
+  function deleteAwardItem(collectionId: string, itemId: number) {
+    setAwardCollections((current) =>
+      current.map((collection) =>
+        collection.id === collectionId
+          ? {
+              ...collection,
+              items: collection.items.filter((item) => item.id !== itemId),
+            }
+          : collection,
+      ),
+    );
+  }
+
   if (session.isPending) {
     return (
       <main className="grid min-h-screen place-items-center text-slate-950">
@@ -755,8 +843,11 @@ export function AdminExperience({ data }: AdminExperienceProps) {
                 publications={publications}
                 activities={activities}
                 videos={videos}
+                awardCollections={awardCollections}
                 onAddPublication={addPublication}
                 onAddActivity={addActivity}
+                onAddAwardCollection={addAwardCollection}
+                onAddAwardItem={addAwardItem}
                 onDeletePublication={(id) =>
                   setPublications((current) =>
                     current.filter((item) => item.id !== id),
@@ -765,6 +856,8 @@ export function AdminExperience({ data }: AdminExperienceProps) {
                 onDeleteActivity={(id) =>
                   setActivities((current) => current.filter((item) => item.id !== id))
                 }
+                onDeleteAwardCollection={deleteAwardCollection}
+                onDeleteAwardItem={deleteAwardItem}
                 onUpdatePublication={(id, patch) =>
                   setPublications((current) =>
                     current.map((item) =>
@@ -786,6 +879,8 @@ export function AdminExperience({ data }: AdminExperienceProps) {
                     ),
                   )
                 }
+                onUpdateAwardCollection={updateAwardCollection}
+                onUpdateAwardItem={updateAwardItem}
               />
             ) : null}
 
@@ -1828,27 +1923,194 @@ function ContentPanel({
   publications,
   activities,
   videos,
+  awardCollections,
   onAddPublication,
   onAddActivity,
+  onAddAwardCollection,
+  onAddAwardItem,
   onDeletePublication,
   onDeleteActivity,
+  onDeleteAwardCollection,
+  onDeleteAwardItem,
   onUpdatePublication,
   onUpdateActivity,
   onUpdateVideo,
+  onUpdateAwardCollection,
+  onUpdateAwardItem,
 }: {
   publications: Publication[];
   activities: ActivitySlide[];
   videos: VideoItem[];
+  awardCollections: AwardCollection[];
   onAddPublication: () => void;
   onAddActivity: () => void;
+  onAddAwardCollection: () => void;
+  onAddAwardItem: (collectionId: string) => void;
   onDeletePublication: (id: number) => void;
   onDeleteActivity: (id: number) => void;
+  onDeleteAwardCollection: (id: string) => void;
+  onDeleteAwardItem: (collectionId: string, itemId: number) => void;
   onUpdatePublication: (id: number, patch: Partial<Publication>) => void;
   onUpdateActivity: (id: number, patch: Partial<ActivitySlide>) => void;
   onUpdateVideo: (id: number, patch: Partial<VideoItem>) => void;
+  onUpdateAwardCollection: (id: string, patch: Partial<AwardCollection>) => void;
+  onUpdateAwardItem: (
+    collectionId: string,
+    itemId: number,
+    patch: Partial<AwardItem>,
+  ) => void;
 }) {
   return (
     <div className="grid gap-4">
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Penghargaan Kanwil & PPID</CardTitle>
+            <CardDescription>
+              Edit koleksi, judul, deskripsi, tahun, dan foto yang tampil pada galeri
+              penghargaan halaman publik.
+            </CardDescription>
+          </div>
+          <Button onClick={onAddAwardCollection}>
+            <Plus className="h-4 w-4" />
+            Tambah Koleksi
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {awardCollections.map((collection) => (
+            <div
+              key={collection.id}
+              className="grid gap-4 rounded-lg border border-white/70 bg-white/45 p-4 shadow-sm backdrop-blur-xl"
+            >
+              <div className="grid gap-3 xl:grid-cols-[0.5fr_1fr_auto]">
+                <InputField
+                  label="ID koleksi"
+                  value={collection.id}
+                  onChange={(value) =>
+                    onUpdateAwardCollection(collection.id, { id: slugifyAdminId(value) })
+                  }
+                />
+                <InputField
+                  label="Judul koleksi"
+                  value={collection.title}
+                  onChange={(value) =>
+                    onUpdateAwardCollection(collection.id, { title: value })
+                  }
+                />
+                <div className="flex items-end justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onAddAwardItem(collection.id)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Foto
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => onDeleteAwardCollection(collection.id)}
+                    aria-label={`Hapus ${collection.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <TextAreaField
+                label="Deskripsi koleksi"
+                value={collection.description}
+                onChange={(value) =>
+                  onUpdateAwardCollection(collection.id, { description: value })
+                }
+              />
+
+              <div className="grid gap-3">
+                {collection.items.map((item) => (
+                  <div
+                    key={`${collection.id}-${item.id}`}
+                    className="grid gap-3 rounded-lg border border-white/70 bg-white/50 p-3 shadow-sm backdrop-blur-xl xl:grid-cols-[220px_1fr_auto]"
+                  >
+                    <div
+                      className="min-h-40 rounded-md border border-white/70 bg-cover bg-center"
+                      style={{
+                        backgroundImage: item.imageUrl ? `url(${item.imageUrl})` : undefined,
+                      }}
+                    />
+                    <div className="grid gap-3">
+                      <div className="grid gap-3 md:grid-cols-[1fr_0.28fr]">
+                        <InputField
+                          label="Judul penghargaan"
+                          value={item.title}
+                          onChange={(value) =>
+                            onUpdateAwardItem(collection.id, item.id, { title: value })
+                          }
+                        />
+                        <InputField
+                          label="Tahun"
+                          type="number"
+                          value={item.year}
+                          onChange={(value) => {
+                            const year = Number(value);
+                            onUpdateAwardItem(collection.id, item.id, {
+                              year: Number.isFinite(year) ? year : item.year,
+                            });
+                          }}
+                        />
+                      </div>
+                      <TextAreaField
+                        label="Deskripsi"
+                        value={item.description}
+                        onChange={(value) =>
+                          onUpdateAwardItem(collection.id, item.id, {
+                            description: value,
+                          })
+                        }
+                      />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <UrlUploadField
+                          label="Foto penghargaan"
+                          value={item.imageUrl}
+                          accept=".jpg,.jpeg,.png,.webp,.gif"
+                          onChange={(value) =>
+                            onUpdateAwardItem(collection.id, item.id, {
+                              imageUrl: value,
+                            })
+                          }
+                        />
+                        <InputField
+                          label="Teks alt gambar"
+                          value={item.alt}
+                          onChange={(value) =>
+                            onUpdateAwardItem(collection.id, item.id, { alt: value })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => onDeleteAwardItem(collection.id, item.id)}
+                        aria-label={`Hapus ${item.title}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {!collection.items.length ? (
+                  <div className="rounded-lg border border-dashed border-emerald-200/80 bg-emerald-50/60 p-4 text-sm font-medium text-emerald-900">
+                    Belum ada foto pada koleksi ini. Klik tombol Foto untuk menambahkan.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-4">
           <div>
@@ -2381,6 +2643,16 @@ function buildChartSeriesFromRows(
 function uniqueValues(values: string[]) {
   return Array.from(
     new Set(values.map((value) => value.trim()).filter(Boolean)),
+  );
+}
+
+function slugifyAdminId(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || `koleksi-${Date.now()}`
   );
 }
 

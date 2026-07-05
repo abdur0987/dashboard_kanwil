@@ -82,7 +82,39 @@ type DashboardExperienceProps = {
 
 type AwardCollection = DashboardData["awardCollections"][number];
 type AwardItem = AwardCollection["items"][number];
+type IndicatorItem = DashboardData["indicators"][number];
 type DashboardTone = "emerald" | "blue" | "gold" | "cyan" | "violet" | "rose";
+type ServiceSummaryCard = {
+  id: string;
+  title: string;
+  badge: string;
+  badgeTone: "success" | "warning" | "neutral";
+  value: number | null;
+  unit: string;
+  subtitle: string;
+  source: string;
+  icon: ElementType;
+  tone: DashboardTone;
+  chips: {
+    label: string;
+    value: string;
+  }[];
+  chipLayout?: "stack" | "grid";
+  sparkline: number[];
+};
+type MadrasahPerformanceMetrics = {
+  accreditation: number | null;
+  certifiedTeachers: number | null;
+  qualifiedTeachers: number | null;
+  teacherStudentRatio: number | null;
+  year: number | null;
+  source: string;
+};
+type AwardShowcaseItem = AwardItem & {
+  collectionId: string;
+  collectionTitle: string;
+  accentLabel: string;
+};
 
 const chartColors = {
   "Pendidikan Madrasah": "#06b6d4",
@@ -107,6 +139,14 @@ const toneColors: Record<DashboardTone, string> = {
   cyan: "#67e8f9",
   violet: "#ddd6fe",
   rose: "#f9a8d4",
+};
+const toneInkColors: Record<DashboardTone, string> = {
+  emerald: "#047857",
+  blue: "#2563eb",
+  gold: "#b45309",
+  cyan: "#0891b2",
+  violet: "#7c3aed",
+  rose: "#be185d",
 };
 const dashboardRefreshIntervalMs = 5 * 60 * 1000;
 
@@ -189,43 +229,10 @@ export function DashboardExperience({ data: initialData }: DashboardExperiencePr
           title="Ringkasan layanan Kementerian Agama Provinsi Lampung"
           description="Kartu indikator menampilkan layanan PTSP, pendidikan madrasah, Bimas Islam, Survei Persepsi Anti Korupsi, dan IPS sebagai gambaran kinerja publik Kanwil."
         />
-        <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {data.indicators.map((indicator) => (
-            <Card key={indicator.id} className="group overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="rounded-md border border-white/70 bg-white/40 p-2 text-primary shadow-sm backdrop-blur-2xl transition group-hover:bg-white/60">
-                    <BarChart3 className="h-5 w-5" aria-hidden />
-                  </div>
-                  <Badge variant={indicator.status === "aktif" ? "success" : "warning"}>
-                    {indicator.status === "aktif" ? "Aktif" : "Validasi"}
-                  </Badge>
-                </div>
-                <CardTitle className="leading-snug">{indicator.name}</CardTitle>
-                <CardDescription>{indicator.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-3xl font-bold text-slate-900">
-                      {formatNumber(indicator.value)}
-                      {indicator.unit === "persen" ? "%" : ""}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Tahun {indicator.year}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-white/60 bg-teal-soft/70 px-2.5 py-1.5 text-sm font-semibold text-teal-ink shadow-sm backdrop-blur">
-                    +{formatNumber(indicator.trend)}%
-                  </div>
-                </div>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  Sumber: {indicator.source}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <ServiceSummaryGrid
+          indicators={data.indicators}
+          datasetDetails={data.datasetDetails}
+        />
       </section>
 
       <section id="agenda" className="section-shell pt-0">
@@ -474,20 +481,20 @@ export function DashboardExperience({ data: initialData }: DashboardExperiencePr
 
 function TopBar({ contact }: { contact: DashboardData["contact"] }) {
   return (
-    <div className="border-b border-white/10 bg-slate-950/90 text-white backdrop-blur-xl">
-      <div className="container flex flex-col gap-2 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="inline-flex items-center gap-1.5">
-            <Phone className="h-3.5 w-3.5" />
+    <div className="border-b border-white/10 bg-slate-950 text-white shadow-sm">
+      <div className="container flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          <span className="inline-flex items-center gap-2 text-white/90">
+            <Phone className="h-4 w-4 text-white" />
             {contact.phone}
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Mail className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-2 text-white/90">
+            <Mail className="h-4 w-4 text-white" />
             {contact.email}
           </span>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-white/80">
-          <Globe2 className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-2 text-white/80">
+          <Globe2 className="h-4 w-4 text-white" />
           {contact.website}
         </span>
       </div>
@@ -534,6 +541,7 @@ function serviceTone(category: string): DashboardTone {
 function toneStyle(tone: DashboardTone): CSSProperties {
   return {
     "--summary-tone": toneColors[tone],
+    "--summary-ink": toneInkColors[tone],
     color: toneColors[tone],
   } as CSSProperties;
 }
@@ -1773,16 +1781,26 @@ function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/50 bg-white/60 shadow-sm backdrop-blur-2xl">
-      <div className="container flex min-h-16 items-center justify-between gap-4">
-        <a href="#" className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 border-b border-emerald-900/10 bg-white/80 shadow-sm backdrop-blur-2xl">
+      <div className="container flex min-h-[88px] items-center justify-between gap-5">
+        <a href="#" className="flex min-w-[250px] items-center gap-3">
           <BrandMark compact />
           <div>
-            <p className="font-bold leading-tight text-slate-900">Dashboard Digital Kanwil</p>
-            <p className="text-xs text-muted-foreground">Kemenag Provinsi Lampung</p>
+            <p className="text-2xl font-bold leading-[0.98] text-slate-950">
+              Dashboard
+              <br />
+              Digital
+              <br />
+              Kanwil
+            </p>
+            <p className="mt-1 text-sm leading-tight text-slate-500">
+              Kemenag Provinsi
+              <br />
+              Lampung
+            </p>
           </div>
         </a>
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden min-w-0 flex-1 items-center justify-end gap-1 2xl:flex">
           {navItems.map((item) => (
             <Button key={`${item.label}-${item.href}`} asChild variant="ghost" size="sm">
               {item.href.startsWith("#") ? (
@@ -1796,7 +1814,7 @@ function SiteHeader() {
         <Button
           size="icon"
           variant="outline"
-          className="md:hidden"
+          className="2xl:hidden"
           aria-label="Buka menu"
           onClick={() => setOpen((value) => !value)}
         >
@@ -1804,7 +1822,7 @@ function SiteHeader() {
         </Button>
       </div>
       {open ? (
-        <nav className="container grid gap-2 border-t border-white/50 bg-white/70 py-3 backdrop-blur-2xl sm:grid-cols-2 md:hidden">
+        <nav className="container grid gap-2 border-t border-white/50 bg-white/70 py-3 backdrop-blur-2xl sm:grid-cols-2 2xl:hidden">
           {navItems.map((item) => (
             item.href.startsWith("#") ? (
               <a
@@ -1902,11 +1920,370 @@ function SectionHeading({
   );
 }
 
+function ServiceSummaryGrid({
+  indicators,
+  datasetDetails,
+}: {
+  indicators: IndicatorItem[];
+  datasetDetails: DashboardData["datasetDetails"];
+}) {
+  const cards = useMemo(
+    () => getServiceSummaryCards(indicators, datasetDetails),
+    [indicators, datasetDetails],
+  );
+
+  return (
+    <div className="mt-7 grid gap-5 lg:grid-cols-2">
+      {cards.map((card) => (
+        <ServiceSummaryCardView key={card.id} card={card} />
+      ))}
+    </div>
+  );
+}
+
+function ServiceSummaryCardView({ card }: { card: ServiceSummaryCard }) {
+  const Icon = card.icon;
+  const linePoints = buildSparklinePoints(card.sparkline);
+
+  return (
+    <article
+      className="service-summary-card group"
+      style={toneStyle(card.tone)}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="service-summary-icon">
+            <Icon className="h-8 w-8" aria-hidden />
+          </span>
+          <h3 className="max-w-[16rem] text-2xl font-bold leading-snug text-slate-900 md:text-3xl">
+            {card.title}
+          </h3>
+        </div>
+        <span className={cn("service-summary-badge", {
+          "service-summary-badge-success": card.badgeTone === "success",
+          "service-summary-badge-warning": card.badgeTone === "warning",
+          "service-summary-badge-neutral": card.badgeTone === "neutral",
+        })}>
+          {card.badge}
+        </span>
+      </div>
+
+      <div className="mt-10">
+        <p className="text-5xl font-bold leading-none text-[color:var(--summary-ink)] md:text-6xl">
+          {card.value === null ? "-" : formatMetricNumber(card.value)}
+          {card.value !== null && card.unit === "persen" ? "%" : ""}
+        </p>
+        <p className="mt-2 text-sm font-semibold leading-5 text-slate-500">
+          {card.subtitle}
+        </p>
+      </div>
+
+      <div
+        className={cn(
+          "mt-7 grid gap-3",
+          card.chipLayout === "grid"
+            ? "service-summary-chip-grid"
+            : "service-summary-chip-stack",
+        )}
+      >
+        {card.chips.map((chip) => (
+          <span key={`${card.id}-${chip.label}`} className="service-summary-chip">
+            <span>{chip.label}</span>
+            <strong>{chip.value}</strong>
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-auto flex items-end justify-between gap-4 pt-8">
+        <p className="text-xs font-semibold leading-5 text-slate-500">
+          Sumber: {card.source}
+        </p>
+        <svg
+          viewBox="0 0 120 44"
+          className="h-11 w-24 shrink-0 overflow-visible text-[color:var(--summary-ink)]"
+          role="img"
+          aria-label={`Tren ${card.title}`}
+        >
+          <polyline
+            points={linePoints}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.82"
+          />
+        </svg>
+      </div>
+    </article>
+  );
+}
+
+function getServiceSummaryCards(
+  indicators: IndicatorItem[],
+  datasetDetails: DashboardData["datasetDetails"],
+): ServiceSummaryCard[] {
+  const byCategory = new Map(indicators.map((indicator) => [indicator.category, indicator]));
+  const publicService = byCategory.get("Layanan Publik");
+  const integrity = byCategory.get("SPAK");
+  const education = byCategory.get("Pendidikan Madrasah");
+  const bimas = byCategory.get("Bimas Islam");
+  const ips = byCategory.get("IPS");
+  const madrasahMetrics = deriveMadrasahPerformanceMetrics(datasetDetails);
+  const madrasahValue = madrasahMetrics.accreditation ?? education?.value ?? null;
+  const madrasahYear = madrasahMetrics.year ?? education?.year ?? "-";
+
+  return [
+    {
+      id: "quality-integrity",
+      title: "Kualitas Layanan & Integritas",
+      badge: "Baik",
+      badgeTone: "success",
+      value: publicService?.value ?? 0,
+      unit: publicService?.unit ?? "persen",
+      subtitle: `Indeks Layanan Publik Tahun ${publicService?.year ?? "-"}`,
+      source: integrity?.source ?? publicService?.source ?? "Kanwil Kemenag Lampung",
+      icon: ShieldCheck,
+      tone: "emerald",
+      chips: [
+        { label: "SKM", value: formatIndicatorValue(publicService) },
+        { label: "SPAK", value: formatIndicatorValue(integrity) },
+      ],
+      sparkline: [72, 76, 78, 86, 84, 92, 88, 96, publicService?.value ?? 96],
+    },
+    {
+      id: "madrasah",
+      title: "Kinerja Pendidikan Madrasah",
+      badge: madrasahValue !== null && madrasahValue >= 90 ? "Baik" : "Perlu Atensi",
+      badgeTone: madrasahValue !== null && madrasahValue >= 90 ? "success" : "warning",
+      value: madrasahValue,
+      unit: "persen",
+      subtitle: `Madrasah Terakreditasi A/B/C Tahun ${madrasahYear}`,
+      source: madrasahMetrics.source,
+      icon: GraduationCap,
+      tone: "blue",
+      chips: [
+        { label: "Akreditasi", value: formatPercentMetric(madrasahMetrics.accreditation) },
+        { label: "Sertifikasi", value: formatPercentMetric(madrasahMetrics.certifiedTeachers) },
+        { label: "Kualifikasi", value: formatPercentMetric(madrasahMetrics.qualifiedTeachers) },
+        { label: "Rasio", value: formatRatioMetric(madrasahMetrics.teacherStudentRatio) },
+      ],
+      chipLayout: "grid",
+      sparkline: [
+        madrasahMetrics.certifiedTeachers ?? 27.88,
+        madrasahMetrics.qualifiedTeachers ?? 94,
+        madrasahMetrics.accreditation ?? 93.46,
+        madrasahValue ?? 93.46,
+      ],
+    },
+    {
+      id: "bimas",
+      title: "Layanan Bimas Islam",
+      badge: bimas && bimas.value >= 92 ? "Aktif" : "Perlu Atensi",
+      badgeTone: bimas && bimas.value >= 92 ? "success" : "warning",
+      value: bimas?.value ?? 0,
+      unit: bimas?.unit ?? "persen",
+      subtitle: `Indeks Kinerja Tahun ${bimas?.year ?? "-"}`,
+      source: bimas?.source ?? "Bidang Bimas Islam",
+      icon: Landmark,
+      tone: "emerald",
+      chips: [
+        { label: "KUA Digital", value: formatIndicatorValue(bimas) },
+        { label: "Tren", value: `+${formatNumber(bimas?.trend ?? 0)}%` },
+      ],
+      sparkline: [72.8, 75.6, 78.9, 86, bimas?.value ?? 91.5, 88, 93],
+    },
+    {
+      id: "ips",
+      title: "Kematangan Data & Statistik",
+      badge: "Aktif",
+      badgeTone: "success",
+      value: ips?.value ?? 0,
+      unit: ips?.unit ?? "indeks",
+      subtitle: "Indeks Pembangunan Statistik",
+      source: ips?.source ?? "Rekap IPS Kanwil",
+      icon: Database,
+      tone: "violet",
+      chips: [
+        { label: "Kategori", value: "Baik / Berkembang" },
+      ],
+      sparkline: [2.2, 2.4, 2.3, 2.7, 2.6, ips?.value ?? 3.1, 2.9, 3.25],
+    },
+  ];
+}
+
+function formatIndicatorValue(indicator?: IndicatorItem) {
+  if (!indicator) return "-";
+
+  return `${formatNumber(indicator.value)}${indicator.unit === "persen" ? "%" : ""}`;
+}
+
+function formatPercentMetric(value: number | null) {
+  return value === null ? "-" : `${formatMetricNumber(value)}%`;
+}
+
+function formatRatioMetric(value: number | null) {
+  return value === null ? "-" : `1:${formatMetricNumber(value)}`;
+}
+
+function formatMetricNumber(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function deriveMadrasahPerformanceMetrics(
+  datasetDetails: DashboardData["datasetDetails"],
+): MadrasahPerformanceMetrics {
+  const educationDetails = datasetDetails.filter((detail) => {
+    return /pendidikan|madrasah/i.test(
+      `${detail.module} ${detail.category} ${detail.title} ${detail.producer}`,
+    );
+  });
+
+  const accreditationTables = educationDetails.filter((detail) => {
+    const title = normalizeMetricText(detail.title);
+
+    return (
+      /jumlah (ra|mi|ml|mts|ma) menurut status akreditasi/.test(title) &&
+      !/jurusan/.test(title)
+    );
+  });
+  const qualificationTables = educationDetails.filter((detail) => {
+    const title = normalizeMetricText(detail.title);
+
+    return (
+      /jumlah guru pada (ra|mi|mts|ma) menurut kualifikasi pendidikan/.test(title) &&
+      !/pendidikan agama|diniyah|pengawas|pondok/.test(title)
+    );
+  });
+  const certificationTables = educationDetails.filter((detail) => {
+    const title = normalizeMetricText(detail.title);
+
+    return (
+      /jumlah guru pada (ra|mi|mts|ma) menurut status sertifikasi/.test(title) &&
+      !/pendidikan agama|diniyah|pengawas|pondok/.test(title)
+    );
+  });
+  const ratioTables = educationDetails.filter((detail) => {
+    const title = normalizeMetricText(detail.title);
+
+    return /jumlah satuan pendidikan guru siswa.*(raudhatul athfal|madrasah ibtidaiyah|madrasah tsanawiyah|madrasah aliyah)/.test(title);
+  });
+
+  const accredited = sumDetailColumns(accreditationTables, ["a", "b", "c"]);
+  const accreditedTotal = sumDetailColumns(accreditationTables, ["jumlah"]);
+  const certified = sumDetailColumns(certificationTables, ["sudah"]);
+  const certifiedTotal = sumDetailColumns(certificationTables, ["jumlah"]);
+  const qualified = sumDetailColumns(qualificationTables, ["s1", "s2"]);
+  const qualifiedTotal = sumDetailColumns(qualificationTables, ["jumlah"]);
+  const teachers = sumDetailColumns(ratioTables, ["guru"]);
+  const students = sumDetailColumns(ratioTables, ["siswa"]);
+  const years = [
+    ...accreditationTables,
+    ...qualificationTables,
+    ...certificationTables,
+    ...ratioTables,
+  ]
+    .map((detail) => detail.year)
+    .filter((year) => Number.isFinite(year));
+
+  return {
+    accreditation: percentOrNull(accredited, accreditedTotal),
+    certifiedTeachers: percentOrNull(certified, certifiedTotal),
+    qualifiedTeachers: percentOrNull(qualified, qualifiedTotal),
+    teacherStudentRatio: teachers > 0 ? students / teachers : null,
+    year: years.length ? Math.max(...years) : null,
+    source: "Bidang Pendidikan Madrasah Kanwil Kemenag Lampung",
+  };
+}
+
+function sumDetailColumns(details: DatasetDetail[], headerLabels: string[]) {
+  return details.reduce((total, detail) => {
+    const indexes = headerLabels
+      .map((label) => findMetricHeaderIndex(detail.headers, label))
+      .filter((index) => index >= 0);
+
+    if (!indexes.length) return total;
+
+    return (
+      total +
+      detail.rows.reduce((rowTotal, row) => {
+        if (isSummaryOrKanwilRow(row)) return rowTotal;
+
+        return rowTotal + indexes.reduce((sum, index) => sum + toMetricNumber(row[index]), 0);
+      }, 0)
+    );
+  }, 0);
+}
+
+function findMetricHeaderIndex(headers: string[], target: string) {
+  return headers.findIndex((header) => normalizeMetricHeader(header) === target);
+}
+
+function normalizeMetricHeader(value: string) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function normalizeMetricText(value: string) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isSummaryOrKanwilRow(row: (string | number)[]) {
+  const label = normalizeMetricText(`${row[0] ?? ""} ${row[1] ?? ""}`);
+
+  return label.includes("kanwil") || label.includes("total");
+}
+
+function toMetricNumber(value: string | number | undefined) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  const normalized = String(value ?? "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+  const number = Number(normalized);
+
+  return Number.isFinite(number) ? number : 0;
+}
+
+function percentOrNull(value: number, total: number) {
+  return total > 0 ? (value / total) * 100 : null;
+}
+
+function buildSparklinePoints(values: number[]) {
+  if (!values.length) return "";
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+
+  return values
+    .map((value, index) => {
+      const x = values.length === 1 ? 60 : (index / (values.length - 1)) * 112 + 4;
+      const y = 38 - ((value - min) / range) * 30;
+
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
 function AwardsSection({
   collections,
 }: {
   collections: DashboardData["awardCollections"];
 }) {
+  const totalItems = collections.reduce((sum, collection) => {
+    return sum + uniqueAwardItems(collection.items).length;
+  }, 0);
+
   return (
     <section id="penghargaan" className="section-shell pt-8 md:pt-12">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1916,168 +2293,169 @@ function AwardsSection({
           description="Galeri penghargaan ditampilkan di bagian atas sebagai etalase prestasi Kanwil Kemenag Lampung. PPID adalah Pejabat Pengelola Informasi dan Dokumentasi."
         />
         <Badge variant="outline" className="w-fit">
-          2 Koleksi
+          {collections.length} Koleksi
         </Badge>
       </div>
 
-      <div className="mt-7 grid gap-5 xl:grid-cols-2">
-        {collections.map((collection) => (
-          <AwardCarousel
-            key={collection.id}
-            collection={collection}
-            delay={collection.id === "ppid" ? 5200 : 4600}
-          />
-        ))}
-      </div>
+      <AwardShowcase collections={collections} totalItems={totalItems} />
     </section>
   );
 }
 
-function AwardCarousel({
-  collection,
-  delay,
+function AwardShowcase({
+  collections,
+  totalItems,
 }: {
-  collection: AwardCollection;
-  delay: number;
+  collections: DashboardData["awardCollections"];
+  totalItems: number;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const items = useMemo(() => uniqueAwardItems(collection.items), [collection.items]);
+  const items = useMemo<AwardShowcaseItem[]>(() => {
+    return collections.flatMap((collection) => {
+      const accentLabel = collection.id === "ppid" ? "PPID" : "Capaian Kanwil";
+
+      return uniqueAwardItems(collection.items).map((item) => ({
+        ...item,
+        collectionId: collection.id,
+        collectionTitle: collection.title,
+        accentLabel,
+      }));
+    });
+  }, [collections]);
   const activeAward = items[activeIndex] ?? items[0];
-  const totalItems = items.length;
-  const accentLabel = collection.id === "ppid" ? "PPID" : "Capaian Kanwil";
+  const slideCount = items.length;
 
   useEffect(() => {
-    if (totalItems <= 1) return;
+    if (slideCount <= 1) return;
 
     const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % totalItems);
-    }, delay);
+      setActiveIndex((current) => (current + 1) % slideCount);
+    }, 5200);
 
     return () => window.clearInterval(timer);
-  }, [delay, totalItems]);
+  }, [slideCount]);
 
   useEffect(() => {
-    if (activeIndex >= totalItems) {
+    if (activeIndex >= slideCount) {
       setActiveIndex(0);
     }
-  }, [activeIndex, totalItems]);
+  }, [activeIndex, slideCount]);
 
   const showPrevious = () => {
-    setActiveIndex((current) => (current - 1 + totalItems) % totalItems);
+    setActiveIndex((current) => (current - 1 + slideCount) % slideCount);
   };
 
   const showNext = () => {
-    setActiveIndex((current) => (current + 1) % totalItems);
+    setActiveIndex((current) => (current + 1) % slideCount);
   };
 
   if (!activeAward) return null;
 
   return (
-    <article className="liquid-award-carousel">
-      <div className="flex flex-col gap-4 p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="rounded-md border border-white/70 bg-white/40 p-2 text-primary shadow-sm backdrop-blur-2xl">
-                <Award className="h-5 w-5" />
-              </span>
-              <Badge variant={collection.id === "ppid" ? "success" : "outline"}>
-                {totalItems} Foto
-              </Badge>
+    <article className="award-showcase mt-7">
+      <div className="flex flex-col gap-5 p-4 md:p-6">
+        <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="award-showcase-icon">
+              <Award className="h-7 w-7" aria-hidden />
+            </span>
+            <Badge variant="success" className="shrink-0">
+              {totalItems} Item
+            </Badge>
+            <span className="hidden h-14 w-px bg-emerald-900/15 sm:block" />
+            <div className="min-w-0">
+              <h3 className="text-2xl font-bold leading-tight tracking-normal text-slate-950">
+                Galeri Penghargaan & Capaian Kanwil
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground md:text-base">
+                Penghargaan dan capaian kinerja Kanwil Kemenag Provinsi Lampung.
+              </p>
             </div>
-            <h3 className="text-xl font-bold leading-tight tracking-normal text-slate-950">
-              {collection.title}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {collection.description}
-            </p>
           </div>
-          <div className="hidden whitespace-nowrap rounded-md border border-white/70 bg-white/40 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-emerald-800 shadow-sm backdrop-blur-2xl sm:block">
-            Slide {activeIndex + 1}/{totalItems}
+          <div className="flex items-center gap-3 2xl:justify-end">
+            <span className="mr-2 text-sm font-bold uppercase text-emerald-800">
+              Slide {activeIndex + 1}/{slideCount}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 rounded-full bg-white/55"
+              onClick={showPrevious}
+              aria-label="Penghargaan sebelumnya"
+              disabled={slideCount <= 1}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 rounded-full bg-white text-slate-950 shadow-sm"
+              onClick={showNext}
+              aria-label="Penghargaan berikutnya"
+              disabled={slideCount <= 1}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
           </div>
         </div>
 
-        <div className="liquid-award-stage group">
-          <Image
-            key={`${collection.id}-${activeAward.id}`}
-            src={activeAward.imageUrl}
-            alt={activeAward.alt}
-            fill
-            sizes="(min-width: 1280px) 50vw, 100vw"
-            className="object-cover transition duration-700 group-hover:scale-[1.02]"
-            priority={collection.id === "capaian-kanwil"}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/12 to-white/10" />
-          <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-            <Badge variant={collection.id === "ppid" ? "success" : "secondary"}>
-              {accentLabel}
-            </Badge>
-            <Badge variant="outline" className="bg-white/55">
-              {activeAward.year}
-            </Badge>
+        <div className="award-showcase-stage">
+          <div className="relative min-h-[280px] overflow-hidden md:min-h-[420px] lg:min-h-[520px]">
+            <Image
+              key={`${activeAward.collectionId}-${activeAward.id}`}
+              src={activeAward.imageUrl}
+              alt={activeAward.alt}
+              fill
+              sizes="(min-width: 1280px) 58vw, 100vw"
+              className="object-cover transition duration-700"
+              priority={activeAward.collectionId === "capaian-kanwil"}
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/0 to-emerald-950/10" />
           </div>
-          <div className="absolute inset-x-4 bottom-4 rounded-lg border border-white/35 bg-white/20 p-4 text-white shadow-sm backdrop-blur-2xl">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/75">
-              Galeri otomatis
-            </p>
-            <h4 className="mt-1 text-lg font-bold leading-tight">
+          <div className="award-showcase-copy">
+            <Badge variant="success" className="w-fit bg-emerald-900/25 text-emerald-50">
+              {activeAward.accentLabel}
+            </Badge>
+            <h4 className="mt-5 max-w-xl text-3xl font-bold leading-tight text-white md:text-4xl">
               {activeAward.title}
             </h4>
-            <p className="mt-1 text-sm leading-6 text-white/80">
+            <p className="mt-4 max-w-xl text-base leading-8 text-emerald-50/80 md:text-lg">
               {activeAward.description}
             </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-emerald-50/25 bg-white/10 text-amber-200 hover:bg-white/20 hover:text-amber-100"
+                onClick={showNext}
+              >
+                Lihat Detail
+                <ArrowUpRight className="h-4 w-4" />
+              </Button>
+              <span className="rounded-md border border-white/10 bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">
+                Tahun {activeAward.year}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-4 rounded-lg border border-white/70 bg-white/30 p-3 shadow-sm backdrop-blur-2xl sm:grid-cols-[1fr_auto] sm:items-center">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
-              {accentLabel}
-            </p>
-            <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-slate-700">
-              {activeAward.description}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
+        <div className="flex justify-center gap-2">
+          {items.map((award, index) => (
+            <button
+              key={`${award.collectionId}-dot-${award.id}`}
               type="button"
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 rounded-full bg-white/35"
-              onClick={showPrevious}
-              aria-label={`Foto sebelumnya ${collection.title}`}
-              disabled={totalItems <= 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-1.5">
-              {items.map((award, index) => (
-                <button
-                  key={`${collection.id}-dot-${award.id}`}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  className={`h-2.5 rounded-full transition-all ${
-                    index === activeIndex
-                      ? "w-8 bg-emerald-700"
-                      : "w-2.5 bg-emerald-900/20 hover:bg-emerald-800/40"
-                  }`}
-                  aria-label={`Tampilkan foto ${index + 1} ${collection.title}`}
-                  aria-current={index === activeIndex}
-                />
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 rounded-full bg-white/35"
-              onClick={showNext}
-              aria-label={`Foto berikutnya ${collection.title}`}
-              disabled={totalItems <= 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+              onClick={() => setActiveIndex(index)}
+              className={`h-2.5 rounded-full transition-all ${
+                index === activeIndex
+                  ? "w-9 bg-emerald-700"
+                  : "w-2.5 bg-emerald-900/15 hover:bg-emerald-800/35"
+              }`}
+              aria-label={`Tampilkan penghargaan ${index + 1}`}
+              aria-current={index === activeIndex}
+            />
+          ))}
         </div>
       </div>
     </article>
