@@ -25,17 +25,21 @@ import {
 import {
   ArrowUpRight,
   Award,
+  BadgeCheck,
   BarChart3,
   Building2,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock,
+  ContactRound,
   Database,
   Download,
+  FileCheck2,
   FileText,
   Globe2,
   GraduationCap,
+  HandCoins,
   Handshake,
   Landmark,
   Mail,
@@ -50,7 +54,10 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Sprout,
   TrendingUp,
+  UserCheck,
+  UsersRound,
   Video,
   X,
 } from "lucide-react";
@@ -84,23 +91,51 @@ type AwardCollection = DashboardData["awardCollections"][number];
 type AwardItem = AwardCollection["items"][number];
 type IndicatorItem = DashboardData["indicators"][number];
 type DashboardTone = "emerald" | "blue" | "gold" | "cyan" | "violet" | "rose";
-type ServiceSummaryCard = {
+type StrategicMetricCard = {
   id: string;
   title: string;
-  badge: string;
-  badgeTone: "success" | "warning" | "neutral";
   value: number | null;
-  unit: string;
+  displayValue: string;
+  description: string;
+  icon: ElementType;
+};
+type BimasServiceMetric = {
+  id: string;
+  label: string;
+  value: string;
+  status: string;
+  tone: "success" | "warning" | "danger";
+  icon: ElementType;
+};
+type BimasServiceGroup = {
+  id: string;
+  title: string;
+  icon: ElementType;
+  items: BimasServiceMetric[];
+};
+type BimasServiceMetrics = {
+  balaiNikah: number | null;
+  kuaLandCertified: number | null;
+  kuaBuildingsGood: number | null;
+  islamCounselorQualified: number | null;
+  trainedPenghulu: number | null;
+  certifiedWakaf: number | null;
+  productiveWakaf: number | null;
+  year: number | null;
+  source: string;
+};
+type StrategicIndicatorPanel = {
+  id: string;
+  title: string;
   subtitle: string;
+  status: string;
+  statusTone: "success" | "warning";
+  year: number | string;
   source: string;
   icon: ElementType;
   tone: DashboardTone;
-  chips: {
-    label: string;
-    value: string;
-  }[];
-  chipLayout?: "stack" | "grid";
-  sparkline: number[];
+  metrics: StrategicMetricCard[];
+  bimasGroups?: BimasServiceGroup[];
 };
 type MadrasahPerformanceMetrics = {
   accreditation: number | null;
@@ -109,6 +144,11 @@ type MadrasahPerformanceMetrics = {
   teacherStudentRatio: number | null;
   year: number | null;
   source: string;
+};
+type IpsCategoryRule = {
+  label: string;
+  range: string;
+  matches: (value: number) => boolean;
 };
 type AwardShowcaseItem = AwardItem & {
   collectionId: string;
@@ -226,8 +266,8 @@ export function DashboardExperience({ data: initialData }: DashboardExperiencePr
       <section id="indikator" className="section-shell">
         <SectionHeading
           eyebrow="Indikator strategis Kanwil"
-          title="Ringkasan layanan Kementerian Agama Provinsi Lampung"
-          description="Kartu indikator menampilkan layanan PTSP, pendidikan madrasah, Bimas Islam, Survei Persepsi Anti Korupsi, dan IPS sebagai gambaran kinerja publik Kanwil."
+          title="Indikator Strategis Kanwil Kementerian Agama Provinsi Lampung"
+          description="Panel indikator menampilkan pendidikan madrasah, layanan publik, Bimas Islam, Survei Persepsi Anti Korupsi, dan IPS sebagai gambaran kinerja publik Kanwil."
         />
         <ServiceSummaryGrid
           indicators={data.indicators}
@@ -595,12 +635,185 @@ function filterDetailRowsByYear(detail: DatasetDetail, selectedYear: string) {
   });
 }
 
+function isIpsDatasetDetail(detail: DatasetDetail) {
+  return /ips|indeks pembangunan statistik/i.test(
+    `${detail.module} ${detail.category} ${detail.title}`,
+  );
+}
+
+function normalizeDatasetHeader(header: string) {
+  return String(header ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findHeaderByNeedles(headers: string[], needles: string[]) {
+  return headers.findIndex((header) => {
+    const normalized = normalizeDatasetHeader(header);
+
+    return needles.some((needle) => normalized.includes(needle));
+  });
+}
+
+function getIpsValueColumnIndex(headers: string[]) {
+  const valueIndex = findHeaderByNeedles(headers, ["nilai ips"]);
+  if (valueIndex >= 0) return valueIndex;
+
+  const genericValueIndex = headers.findIndex((header) => {
+    const normalized = normalizeDatasetHeader(header);
+    return normalized === "nilai" || normalized === "skor" || normalized === "score";
+  });
+
+  return genericValueIndex;
+}
+
+function parseIpsValue(value: string | number | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const parsed = Number(
+    String(value ?? "")
+      .replace(",", ".")
+      .replace(/[^\d.-]/g, "")
+      .trim(),
+  );
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getIpsCategoryRule(value: string | number | undefined) {
+  const numericValue = parseIpsValue(value);
+  if (numericValue === null) return null;
+
+  return ipsCategoryRules.find((rule) => rule.matches(numericValue)) ?? null;
+}
+
+function moveYearColumnToEnd(
+  headers: string[],
+  rows: DatasetDetail["rows"],
+) {
+  const yearIndex = getYearColumnIndex(headers);
+  if (yearIndex < 0 || yearIndex === headers.length - 1) {
+    return {
+      headers,
+      rows,
+    };
+  }
+
+  const order = headers
+    .map((_, index) => index)
+    .filter((index) => index !== yearIndex)
+    .concat(yearIndex);
+
+  return {
+    headers: order.map((index) => headers[index]),
+    rows: rows.map((row) => order.map((index) => row[index] ?? "")),
+  };
+}
+
+function buildIpsDatasetTable(
+  detail: DatasetDetail,
+  rows: DatasetDetail["rows"],
+) {
+  if (!isIpsDatasetDetail(detail)) {
+    return {
+      headers: detail.headers,
+      rows,
+    };
+  }
+
+  const valueIndex = getIpsValueColumnIndex(detail.headers);
+  const workUnitIndex = findHeaderByNeedles(detail.headers, [
+    "kabupaten",
+    "kota",
+    "satuan kerja",
+    "wilayah",
+    "kantor",
+  ]);
+  const categoryIndex = findHeaderByNeedles(detail.headers, ["kategori"]);
+  const noteIndex = findHeaderByNeedles(detail.headers, ["keterangan"]);
+  const headers = [...detail.headers];
+  const displayRows = rows.map((row) => [...row]);
+
+  if (categoryIndex < 0) {
+    headers.push("Kategori");
+  }
+
+  if (noteIndex < 0) {
+    headers.push("Keterangan");
+  }
+
+  const nextCategoryIndex =
+    categoryIndex >= 0 ? categoryIndex : headers.findIndex((header) => header === "Kategori");
+  const nextNoteIndex =
+    noteIndex >= 0 ? noteIndex : headers.findIndex((header) => header === "Keterangan");
+
+  return moveYearColumnToEnd(
+    headers,
+    displayRows.map((row) => {
+      const nextRow = [...row];
+      const rule = valueIndex >= 0 ? getIpsCategoryRule(nextRow[valueIndex]) : null;
+
+      while (nextRow.length < headers.length) {
+        nextRow.push("");
+      }
+
+      if (workUnitIndex >= 0) {
+        nextRow[workUnitIndex] = formatIpsWorkUnitName(nextRow[workUnitIndex]);
+      }
+
+      if (nextCategoryIndex >= 0 && !String(nextRow[nextCategoryIndex] ?? "").trim()) {
+        nextRow[nextCategoryIndex] = rule?.label ?? "-";
+      }
+
+      if (nextNoteIndex >= 0 && !String(nextRow[nextNoteIndex] ?? "").trim()) {
+        nextRow[nextNoteIndex] = rule?.range ?? "-";
+      }
+
+      return nextRow;
+    }),
+  );
+}
+
 const dataPortalModuleOrder = [
   "Semua",
   "Tata Kelola",
   "Pendidikan",
   "Agama dan Keagamaan",
   "Indeks Pembangunan Statistik (IPS)",
+];
+const ipsCategoryRules: IpsCategoryRule[] = [
+  {
+    label: "Tidak Mengikuti",
+    range: "0",
+    matches: (value) => value === 0,
+  },
+  {
+    label: "Kurang",
+    range: "1 <= Nilai IPS < 1,8",
+    matches: (value) => value >= 1 && value < 1.8,
+  },
+  {
+    label: "Cukup",
+    range: "1,8 <= Nilai IPS < 2,6",
+    matches: (value) => value >= 1.8 && value < 2.6,
+  },
+  {
+    label: "Baik",
+    range: "2,6 <= Nilai IPS < 3,5",
+    matches: (value) => value >= 2.6 && value < 3.5,
+  },
+  {
+    label: "Sangat Baik",
+    range: "3,5 <= Nilai IPS < 4,2",
+    matches: (value) => value >= 3.5 && value < 4.2,
+  },
+  {
+    label: "Memuaskan",
+    range: "4,2 <= Nilai IPS <= 5,0",
+    matches: (value) => value >= 4.2 && value <= 5,
+  },
 ];
 
 function getDataPortalModules(details: DatasetDetail[]) {
@@ -632,6 +845,39 @@ const lampungRegionAliases: Record<string, string> = {
   "provinsi lampung": "Kanwil Lampung",
   lampung: "Lampung",
 };
+const ipsWorkUnitNames: Record<string, string> = {
+  "lampung barat": "Kan. Kemenag Kab. Lampung Barat",
+  tanggamus: "Kan. Kemenag Kab. Tanggamus",
+  "lampung selatan": "Kan. Kemenag Kab. Lampung Selatan",
+  "lampung timur": "Kan. Kemenag Kab. Lampung Timur",
+  "lampung tengah": "Kan. Kemenag Kab. Lampung Tengah",
+  "lampung utara": "Kan. Kemenag Kab. Lampung Utara",
+  "way kanan": "Kan. Kemenag Kab. Way Kanan",
+  "tulang bawang": "Kan. Kemenag Kab. Tulang Bawang",
+  pesawaran: "Kan. Kemenag Kab. Pesawaran",
+  pringsewu: "Kan. Kemenag Kab. Pringsewu",
+  mesuji: "Kan. Kemenag Kab. Mesuji",
+  "tulang bawang barat": "Kan. Kemenag Kab. Tulang Bawang Barat",
+  "pesisir barat": "Kan. Kemenag Kab. Pesisir Barat",
+  "bandar lampung": "Kan. Kemenag Kota Bandar Lampung",
+  metro: "Kan. Kemenag Kota Metro",
+};
+
+function formatIpsWorkUnitName(value: string | number | undefined) {
+  const rawValue = String(value ?? "").trim();
+  const normalized = normalizeDatasetHeader(rawValue)
+    .replace(/\bkan\b/g, " ")
+    .replace(/\bkemenag\b/g, " ")
+    .replace(/\bkab\b/g, " ")
+    .replace(/\bkota\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const matchedKey = Object.keys(ipsWorkUnitNames)
+    .sort((a, b) => b.length - a.length)
+    .find((key) => normalized.includes(key));
+
+  return matchedKey ? ipsWorkUnitNames[matchedKey] : rawValue;
+}
 
 function shortenStatisticLabel(value: string) {
   const cleaned = value
@@ -709,15 +955,29 @@ function isNumericColumn(header: string, rows: DatasetDetail["rows"], index: num
   );
 }
 
-function datasetColumnClass(header: string, rows: DatasetDetail["rows"], index: number) {
+function datasetColumnClass(
+  header: string,
+  rows: DatasetDetail["rows"],
+  index: number,
+  compact = false,
+) {
   const normalized = header.toLowerCase();
+  const horizontalPadding = compact ? "px-3" : "px-4";
 
   if (isNoColumn(header, index)) {
-    return "w-14 min-w-14 max-w-16 px-3 text-center";
+    return "w-12 min-w-12 max-w-14 px-2 text-center";
   }
 
   if (/tahun|year/.test(normalized)) {
     return "w-24 min-w-24 max-w-28 px-3 text-center";
+  }
+
+  if (/kategori/.test(normalized)) {
+    return "w-36 min-w-36 max-w-44 px-3 text-center";
+  }
+
+  if (/keterangan/.test(normalized)) {
+    return compact ? "min-w-[190px] max-w-[260px] px-3" : "min-w-[220px] max-w-[320px] px-4";
   }
 
   if (isNumericColumn(header, rows, index)) {
@@ -725,10 +985,10 @@ function datasetColumnClass(header: string, rows: DatasetDetail["rows"], index: 
   }
 
   if (/satuan kerja|nama|wilayah|provinsi|kabupaten|kota|kantor/.test(normalized)) {
-    return "min-w-[220px] max-w-[360px] px-4";
+    return compact ? "min-w-[260px] max-w-[320px] px-3" : "min-w-[220px] max-w-[360px] px-4";
   }
 
-  return "min-w-[120px] max-w-[240px] px-4";
+  return compact ? `min-w-[110px] max-w-[200px] ${horizontalPadding}` : `min-w-[120px] max-w-[240px] ${horizontalPadding}`;
 }
 
 function DatasetPortal({
@@ -903,6 +1163,7 @@ function DatasetPortal({
                     {selectedRows.length} dari {selectedDetail.rows.length} baris
                   </Badge>
                 </div>
+                {isIpsDatasetDetail(selectedDetail) ? <IpsCategoryLegend /> : null}
                 <div className="overflow-hidden rounded-lg border border-emerald-100 bg-white/80">
                   <div className="max-h-[760px] overflow-auto">
                     <DatasetSourceTable detail={selectedDetail} rows={selectedRows} />
@@ -1028,7 +1289,7 @@ function DatasetPortal({
                     className="mt-3 block w-full text-left"
                   >
                     <p className="line-clamp-2 text-sm leading-6 text-muted-foreground transition group-hover:text-slate-700">
-                    {detail.description}
+                      {detail.description}
                     </p>
                   </button>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1074,6 +1335,28 @@ function DatasetPortal({
   );
 }
 
+function IpsCategoryLegend() {
+  return (
+    <div className="mb-5 rounded-lg border border-emerald-100 bg-emerald-50/55 p-4 shadow-sm">
+      <p className="text-sm font-bold text-emerald-950">Keterangan kategori IPS</p>
+      <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2 xl:grid-cols-3">
+        {ipsCategoryRules.map((rule) => (
+          <div
+            key={rule.label}
+            className="flex items-start gap-3 rounded-md border border-white/70 bg-white/70 px-3 py-2"
+          >
+            <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-emerald-600" />
+            <span className="grid gap-0.5">
+              <strong className="font-bold text-slate-900">{rule.label}</strong>
+              <span>{rule.range}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DatasetSourceTable({
   detail,
   rows,
@@ -1083,18 +1366,21 @@ function DatasetSourceTable({
 }) {
   const sourceRows = rows ?? detail.rows;
   if (!sourceRows.length) return <EmptyState />;
-  const visibleRows = sourceRows.slice(0, 500);
+  const isIpsTable = isIpsDatasetDetail(detail);
+  const tableData = buildIpsDatasetTable(detail, sourceRows);
+  const visibleRows = tableData.rows.slice(0, 500);
 
   return (
-    <Table className="w-full min-w-max table-auto text-sm">
+    <Table className={cn("w-full min-w-max table-auto text-sm", isIpsTable && "text-[13px]")}>
       <TableHeader>
         <TableRow className="border-emerald-100 bg-gradient-to-r from-emerald-50/95 via-cyan-50/80 to-white/95">
-          {detail.headers.map((header, index) => (
+          {tableData.headers.map((header, index) => (
             <TableHead
               key={`${header}-${index}`}
               className={cn(
-                "sticky top-0 z-10 bg-emerald-50/95 py-4 font-bold text-emerald-950",
-                datasetColumnClass(String(header ?? ""), sourceRows, index),
+                "sticky top-0 z-10 bg-emerald-50/95 font-bold text-emerald-950",
+                isIpsTable ? "py-3" : "py-4",
+                datasetColumnClass(String(header ?? ""), tableData.rows, index, isIpsTable),
               )}
             >
               {header || `Kolom ${index + 1}`}
@@ -1108,12 +1394,13 @@ function DatasetSourceTable({
             key={`${detail.id}-${rowIndex}`}
             className="border-emerald-50 odd:bg-white/60 even:bg-cyan-50/20"
           >
-            {detail.headers.map((header, cellIndex) => (
+            {tableData.headers.map((header, cellIndex) => (
               <TableCell
                 key={`${detail.id}-${rowIndex}-${cellIndex}`}
                 className={cn(
-                  "whitespace-normal py-3 align-top leading-6 text-slate-800",
-                  datasetColumnClass(String(header ?? ""), sourceRows, cellIndex),
+                  "whitespace-normal align-top text-slate-800",
+                  isIpsTable ? "py-2.5 leading-5" : "py-3 leading-6",
+                  datasetColumnClass(String(header ?? ""), tableData.rows, cellIndex, isIpsTable),
                 )}
               >
                 {String(row[cellIndex] ?? "-")}
@@ -1124,7 +1411,7 @@ function DatasetSourceTable({
         {sourceRows.length > visibleRows.length ? (
           <TableRow>
             <TableCell
-              colSpan={detail.headers.length}
+              colSpan={tableData.headers.length}
               className="bg-white/70 py-4 text-center text-sm text-muted-foreground"
             >
               Menampilkan 500 dari {sourceRows.length} baris. Gunakan unduhan Excel
@@ -1331,11 +1618,10 @@ function StatisticsPortal({ details }: { details: DatasetDetail[] }) {
                           key={detail.id}
                           type="button"
                           onClick={() => setOpenId(detail.id)}
-                          className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition ${
-                            isOpen
-                              ? "bg-emerald-100/75 text-emerald-950"
-                              : "bg-white/35 text-slate-900 hover:bg-white/75"
-                          }`}
+                          className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition ${isOpen
+                            ? "bg-emerald-100/75 text-emerald-950"
+                            : "bg-white/35 text-slate-900 hover:bg-white/75"
+                            }`}
                         >
                           <span className="min-w-0">
                             <span className="line-clamp-2 text-sm font-semibold leading-snug">
@@ -1346,11 +1632,10 @@ function StatisticsPortal({ details }: { details: DatasetDetail[] }) {
                             </span>
                           </span>
                           <ChevronRight
-                            className={`h-5 w-5 shrink-0 transition ${
-                              isOpen
-                                ? "rotate-90 text-emerald-700"
-                                : "text-slate-400"
-                            }`}
+                            className={`h-5 w-5 shrink-0 transition ${isOpen
+                              ? "rotate-90 text-emerald-700"
+                              : "text-slate-400"
+                              }`}
                           />
                         </button>
                       );
@@ -1565,11 +1850,10 @@ function GeotaggingPortal({ offices }: { offices: DashboardData["officeLocations
                 key={office.id}
                 type="button"
                 onClick={() => setSelectedId(office.id)}
-                className={`rounded-lg border p-4 text-left transition ${
-                  active
-                    ? "border-emerald-300 bg-emerald-50/85 shadow-glass"
-                    : "border-white/70 bg-white/45 hover:bg-white/70"
-                }`}
+                className={`rounded-lg border p-4 text-left transition ${active
+                  ? "border-emerald-300 bg-emerald-50/85 shadow-glass"
+                  : "border-white/70 bg-white/45 hover:bg-white/70"
+                  }`}
               >
                 <div className="flex items-start gap-3">
                   <div className="rounded-md border border-white/70 bg-white/55 p-2 text-emerald-700">
@@ -1927,102 +2211,179 @@ function ServiceSummaryGrid({
   indicators: IndicatorItem[];
   datasetDetails: DashboardData["datasetDetails"];
 }) {
-  const cards = useMemo(
-    () => getServiceSummaryCards(indicators, datasetDetails),
+  const panels = useMemo(
+    () => getStrategicIndicatorPanels(indicators, datasetDetails),
     [indicators, datasetDetails],
   );
 
   return (
-    <div className="mt-7 grid gap-5 lg:grid-cols-2">
-      {cards.map((card) => (
-        <ServiceSummaryCardView key={card.id} card={card} />
+    <div className="mt-7 grid gap-6">
+      {panels.map((panel) => (
+        <StrategicIndicatorPanelView key={panel.id} panel={panel} />
       ))}
     </div>
   );
 }
 
-function ServiceSummaryCardView({ card }: { card: ServiceSummaryCard }) {
-  const Icon = card.icon;
-  const linePoints = buildSparklinePoints(card.sparkline);
+function StrategicIndicatorPanelView({ panel }: { panel: StrategicIndicatorPanel }) {
+  const Icon = panel.icon;
+  const metricGridClass =
+    panel.metrics.length >= 4
+      ? "xl:grid-cols-4"
+      : panel.metrics.length === 3
+        ? "xl:grid-cols-3"
+        : "xl:grid-cols-2";
+  const previousYear = Number(panel.year) - 1;
 
   return (
-    <article
-      className="service-summary-card group"
-      style={toneStyle(card.tone)}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <span className="service-summary-icon">
-            <Icon className="h-8 w-8" aria-hidden />
+    <article className="strategic-performance-panel" style={toneStyle(panel.tone)}>
+      <div className="relative z-10">
+        <div className="grid gap-6 lg:grid-cols-[auto_1fr_auto] lg:items-start">
+          <span className="strategic-performance-icon">
+            <Icon className="h-14 w-14" aria-hidden />
           </span>
-          <h3 className="max-w-[16rem] text-2xl font-bold leading-snug text-slate-900 md:text-3xl">
-            {card.title}
-          </h3>
+          <div className="min-w-0">
+            <h3 className="max-w-3xl text-4xl font-bold leading-tight text-slate-950 md:text-5xl">
+              {panel.title}
+            </h3>
+            <p className="mt-4 text-base font-medium leading-7 text-slate-500 md:text-lg">
+              {panel.subtitle}
+            </p>
+            <span className="strategic-year-pill mt-4">
+              <CalendarDays className="h-4 w-4" aria-hidden />
+              Tahun {panel.year}
+            </span>
+          </div>
+          <span
+            className={cn(
+              "strategic-status-pill",
+              panel.statusTone === "warning" && "strategic-status-pill-warning",
+            )}
+          >
+            <span />
+            {panel.status}
+          </span>
         </div>
-        <span className={cn("service-summary-badge", {
-          "service-summary-badge-success": card.badgeTone === "success",
-          "service-summary-badge-warning": card.badgeTone === "warning",
-          "service-summary-badge-neutral": card.badgeTone === "neutral",
-        })}>
-          {card.badge}
-        </span>
-      </div>
 
-      <div className="mt-10">
-        <p className="text-5xl font-bold leading-none text-[color:var(--summary-ink)] md:text-6xl">
-          {card.value === null ? "-" : formatMetricNumber(card.value)}
-          {card.value !== null && card.unit === "persen" ? "%" : ""}
-        </p>
-        <p className="mt-2 text-sm font-semibold leading-5 text-slate-500">
-          {card.subtitle}
-        </p>
-      </div>
+        {panel.bimasGroups ? (
+          <BimasServiceOverview groups={panel.bimasGroups} />
+        ) : (
+          <div className={cn("mt-9 grid gap-5 md:grid-cols-2", metricGridClass)}>
+            {panel.metrics.map((metric) => {
+              const MetricIcon = metric.icon;
 
-      <div
-        className={cn(
-          "mt-7 grid gap-3",
-          card.chipLayout === "grid"
-            ? "service-summary-chip-grid"
-            : "service-summary-chip-stack",
+              return (
+                <div key={metric.id} className="strategic-metric-card">
+                  <span className="strategic-metric-icon">
+                    <MetricIcon className="h-7 w-7" aria-hidden />
+                  </span>
+                  <h4 className="mt-5 text-lg font-bold leading-snug text-slate-900">
+                    {metric.title}
+                  </h4>
+                  <p className="mt-2 min-h-[4.25rem] text-sm font-medium leading-6 text-slate-500">
+                    {metric.description}
+                  </p>
+                  <div className="my-5 h-px bg-slate-200/80" />
+                  <p className="strategic-metric-value">
+                    {metric.displayValue}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <span className="strategic-trend-pill">
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                      +0%
+                    </span>
+                    {Number.isFinite(previousYear) ? (
+                      <span className="text-xs font-semibold text-slate-500">
+                        vs Tahun {previousYear}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
-      >
-        {card.chips.map((chip) => (
-          <span key={`${card.id}-${chip.label}`} className="service-summary-chip">
-            <span>{chip.label}</span>
-            <strong>{chip.value}</strong>
-          </span>
-        ))}
-      </div>
 
-      <div className="mt-auto flex items-end justify-between gap-4 pt-8">
-        <p className="text-xs font-semibold leading-5 text-slate-500">
-          Sumber: {card.source}
-        </p>
-        <svg
-          viewBox="0 0 120 44"
-          className="h-11 w-24 shrink-0 overflow-visible text-[color:var(--summary-ink)]"
-          role="img"
-          aria-label={`Tren ${card.title}`}
-        >
-          <polyline
-            points={linePoints}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.82"
-          />
-        </svg>
+        <div className="mt-7 border-t border-slate-200/80 pt-5">
+          <div className="flex flex-col gap-3 text-sm font-semibold text-slate-500 sm:flex-row sm:items-center">
+            <span className="strategic-source-icon">
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+            </span>
+            <span>Sumber: {panel.source}</span>
+          </div>
+        </div>
       </div>
     </article>
   );
 }
 
-function getServiceSummaryCards(
+function BimasServiceOverview({ groups }: { groups: BimasServiceGroup[] }) {
+  return (
+    <div className="mt-9 grid gap-5 lg:grid-cols-3">
+      {groups.map((group) => {
+        const GroupIcon = group.icon;
+
+        return (
+          <div key={group.id} className="bimas-service-card">
+            <div className="flex items-center gap-4 border-b border-slate-200/80 pb-4">
+              <span className="bimas-service-icon">
+                <GroupIcon className="h-7 w-7" aria-hidden />
+              </span>
+              <h4 className="text-xl font-bold text-slate-950">{group.title}</h4>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {group.items.map((item) => {
+                const ItemIcon = item.icon;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="bimas-service-metric-card"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="bimas-service-item-icon">
+                        <ItemIcon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <p className="min-h-10 text-sm font-bold leading-5 text-slate-900">
+                        {item.label}
+                      </p>
+                    </div>
+                    <div className="my-4 h-px bg-slate-200/80" />
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <strong className="text-3xl font-bold leading-none text-emerald-700">
+                        {item.value}
+                      </strong>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-md px-3 py-1.5 text-xs font-bold",
+                          bimasStatusClass(item.tone),
+                        )}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function bimasStatusClass(tone: BimasServiceMetric["tone"]) {
+  if (tone === "danger") return "bg-rose-100 text-rose-700";
+  if (tone === "warning") return "bg-amber-100 text-amber-700";
+
+  return "bg-emerald-100 text-emerald-700";
+}
+
+function getStrategicIndicatorPanels(
   indicators: IndicatorItem[],
   datasetDetails: DashboardData["datasetDetails"],
-): ServiceSummaryCard[] {
+): StrategicIndicatorPanel[] {
   const byCategory = new Map(indicators.map((indicator) => [indicator.category, indicator]));
   const publicService = byCategory.get("Layanan Publik");
   const integrity = byCategory.get("SPAK");
@@ -2030,84 +2391,128 @@ function getServiceSummaryCards(
   const bimas = byCategory.get("Bimas Islam");
   const ips = byCategory.get("IPS");
   const madrasahMetrics = deriveMadrasahPerformanceMetrics(datasetDetails);
+  const bimasMetrics = deriveBimasServiceMetrics(datasetDetails);
   const madrasahValue = madrasahMetrics.accreditation ?? education?.value ?? null;
   const madrasahYear = madrasahMetrics.year ?? education?.year ?? "-";
 
   return [
     {
-      id: "quality-integrity",
-      title: "Kualitas Layanan & Integritas",
-      badge: "Baik",
-      badgeTone: "success",
-      value: publicService?.value ?? 0,
-      unit: publicService?.unit ?? "persen",
-      subtitle: `Indeks Layanan Publik Tahun ${publicService?.year ?? "-"}`,
-      source: integrity?.source ?? publicService?.source ?? "Kanwil Kemenag Lampung",
-      icon: ShieldCheck,
-      tone: "emerald",
-      chips: [
-        { label: "SKM", value: formatIndicatorValue(publicService) },
-        { label: "SPAK", value: formatIndicatorValue(integrity) },
-      ],
-      sparkline: [72, 76, 78, 86, 84, 92, 88, 96, publicService?.value ?? 96],
-    },
-    {
       id: "madrasah",
       title: "Kinerja Pendidikan Madrasah",
-      badge: madrasahValue !== null && madrasahValue >= 90 ? "Baik" : "Perlu Atensi",
-      badgeTone: madrasahValue !== null && madrasahValue >= 90 ? "success" : "warning",
-      value: madrasahValue,
-      unit: "persen",
-      subtitle: `Madrasah Terakreditasi A/B/C Tahun ${madrasahYear}`,
+      subtitle: "Ringkasan capaian utama pendidikan madrasah",
+      status: madrasahValue !== null && madrasahValue >= 90 ? "Baik" : "Perlu Atensi",
+      statusTone: madrasahValue !== null && madrasahValue >= 90 ? "success" : "warning",
+      year: madrasahYear,
       source: madrasahMetrics.source,
       icon: GraduationCap,
       tone: "blue",
-      chips: [
-        { label: "Akreditasi", value: formatPercentMetric(madrasahMetrics.accreditation) },
-        { label: "Sertifikasi", value: formatPercentMetric(madrasahMetrics.certifiedTeachers) },
-        { label: "Kualifikasi", value: formatPercentMetric(madrasahMetrics.qualifiedTeachers) },
-        { label: "Rasio", value: formatRatioMetric(madrasahMetrics.teacherStudentRatio) },
+      metrics: [
+        {
+          id: "akreditasi",
+          title: "Akreditasi madrasah",
+          description:
+            "Persentase madrasah terakreditasi A, B, dan C dari total madrasah",
+          value: madrasahMetrics.accreditation,
+          displayValue: formatPercentMetric(madrasahMetrics.accreditation),
+          icon: Award,
+        },
+        {
+          id: "sertifikasi",
+          title: "Guru bersertifikat",
+          description:
+            "Persentase guru madrasah yang sudah memiliki sertifikasi pendidik",
+          value: madrasahMetrics.certifiedTeachers,
+          displayValue: formatPercentMetric(madrasahMetrics.certifiedTeachers),
+          icon: UserCheck,
+        },
+        {
+          id: "kualifikasi",
+          title: "Kualifikasi guru",
+          description: "Persentase guru madrasah berkualifikasi S1 dan S2",
+          value: madrasahMetrics.qualifiedTeachers,
+          displayValue: formatPercentMetric(madrasahMetrics.qualifiedTeachers),
+          icon: GraduationCap,
+        },
+        {
+          id: "rasio",
+          title: "Rasio guru-siswa",
+          description: "Rasio rata-rata jumlah siswa yang dilayani oleh satu guru",
+          value: madrasahMetrics.teacherStudentRatio,
+          displayValue: formatRatioMetric(madrasahMetrics.teacherStudentRatio),
+          icon: UsersRound,
+        },
       ],
-      chipLayout: "grid",
-      sparkline: [
-        madrasahMetrics.certifiedTeachers ?? 27.88,
-        madrasahMetrics.qualifiedTeachers ?? 94,
-        madrasahMetrics.accreditation ?? 93.46,
-        madrasahValue ?? 93.46,
+    },
+    {
+      id: "quality-integrity",
+      title: "Kualitas Layanan & Integritas",
+      subtitle: "Ringkasan layanan publik, kepuasan masyarakat, dan integritas",
+      status: "Baik",
+      statusTone: "success",
+      year: publicService?.year ?? integrity?.year ?? "-",
+      source: integrity?.source ?? publicService?.source ?? "Kanwil Kemenag Lampung",
+      icon: ShieldCheck,
+      tone: "emerald",
+      metrics: [
+        {
+          id: "skm",
+          title: "Survei Kepuasan Masyarakat",
+          description: "Indeks layanan publik Kanwil untuk kebutuhan informasi dan administrasi",
+          value: publicService?.value ?? null,
+          displayValue: formatIndicatorValue(publicService),
+          icon: Handshake,
+        },
+        {
+          id: "spak",
+          title: "Survei Persepsi Anti Korupsi",
+          description: "Indeks penilaian layanan anti korupsi Kanwil Kemenag Provinsi Lampung",
+          value: integrity?.value ?? null,
+          displayValue: formatIndicatorValue(integrity),
+          icon: ShieldCheck,
+        },
       ],
     },
     {
       id: "bimas",
       title: "Layanan Bimas Islam",
-      badge: bimas && bimas.value >= 92 ? "Aktif" : "Perlu Atensi",
-      badgeTone: bimas && bimas.value >= 92 ? "success" : "warning",
-      value: bimas?.value ?? 0,
-      unit: bimas?.unit ?? "persen",
-      subtitle: `Indeks Kinerja Tahun ${bimas?.year ?? "-"}`,
-      source: bimas?.source ?? "Bidang Bimas Islam",
+      subtitle: "Pemantauan layanan KUA, bimbingan keluarga, dan program keagamaan masyarakat",
+      status: bimas && bimas.value >= 92 ? "Baik" : "Perlu Atensi",
+      statusTone: bimas && bimas.value >= 92 ? "success" : "warning",
+      year: bimasMetrics.year ?? bimas?.year ?? "-",
+      source: bimasMetrics.source,
       icon: Landmark,
       tone: "emerald",
-      chips: [
-        { label: "KUA Digital", value: formatIndicatorValue(bimas) },
-        { label: "Tren", value: `+${formatNumber(bimas?.trend ?? 0)}%` },
-      ],
-      sparkline: [72.8, 75.6, 78.9, 86, bimas?.value ?? 91.5, 88, 93],
+      metrics: [],
+      bimasGroups: getBimasServiceGroups(bimasMetrics),
     },
     {
       id: "ips",
       title: "Kematangan Data & Statistik",
-      badge: "Aktif",
-      badgeTone: "success",
-      value: ips?.value ?? 0,
-      unit: ips?.unit ?? "indeks",
-      subtitle: "Indeks Pembangunan Statistik",
-      source: ips?.source ?? "Rekap IPS Kanwil",
+      subtitle: "Ringkasan Indeks Pembangunan Statistik sektoral",
+      status: "Aktif",
+      statusTone: "success",
+      year: ips?.year ?? "-",
+      source: ips?.source ?? "Rekap IPS Kanwil Kemenag Lampung",
       icon: Database,
       tone: "violet",
-      chips: [
-        { label: "Kategori", value: "Baik / Berkembang" },
+      metrics: [
+        {
+          id: "ips-score",
+          title: "Indeks Pembangunan Statistik",
+          description: "Rekap nilai IPS kabupaten/kota sebagai gambaran statistik sektoral",
+          value: ips?.value ?? null,
+          displayValue: formatIndicatorValue(ips),
+          icon: Database,
+        },
+        {
+          id: "ips-category",
+          title: "Kategori",
+          description: "Kategori kematangan penyelenggaraan statistik sektoral Kanwil",
+          value: null,
+          displayValue: "Baik / Berkembang",
+          icon: BadgeCheck,
+        },
       ],
-      sparkline: [2.2, 2.4, 2.3, 2.7, 2.6, ips?.value ?? 3.1, 2.9, 3.25],
     },
   ];
 }
@@ -2130,6 +2535,187 @@ function formatMetricNumber(value: number) {
   return new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function getBimasServiceGroups(metrics: BimasServiceMetrics): BimasServiceGroup[] {
+  return [
+    {
+      icon: Landmark,
+      id: "kua-sarpras",
+      title: "KUA & Sarpras",
+      items: [
+        buildBimasMetricItem({
+          id: "balai-nikah",
+          label: "KUA Miliki Balai Nikah",
+          value: metrics.balaiNikah,
+          icon: HandCoins,
+        }),
+        buildBimasMetricItem({
+          id: "tanah-kua",
+          label: "Tanah KUA Bersertifikat",
+          value: metrics.kuaLandCertified,
+          icon: FileCheck2,
+        }),
+        buildBimasMetricItem({
+          id: "bangunan-kua",
+          label: "Bangunan KUA Baik",
+          value: metrics.kuaBuildingsGood,
+          icon: Building2,
+        }),
+      ],
+    },
+    {
+      icon: UsersRound,
+      id: "sdm-layanan",
+      title: "SDM Layanan",
+      items: [
+        buildBimasMetricItem({
+          id: "penyuluh-s1",
+          label: "Penyuluh S1 Ke Atas",
+          value: metrics.islamCounselorQualified,
+          icon: ContactRound,
+        }),
+        buildBimasMetricItem({
+          id: "penghulu-pembinaan",
+          label: "Penghulu Mendapat Pembinaan",
+          value: metrics.trainedPenghulu,
+          icon: ContactRound,
+        }),
+      ],
+    },
+    {
+      icon: Landmark,
+      id: "wakaf",
+      title: "Wakaf",
+      items: [
+        buildBimasMetricItem({
+          id: "wakaf-sertifikat",
+          label: "Tanah Wakaf Bersertifikat",
+          value: metrics.certifiedWakaf,
+          icon: FileCheck2,
+        }),
+        buildBimasMetricItem({
+          id: "wakaf-produktif",
+          label: "Tanah Wakaf Produktif",
+          value: metrics.productiveWakaf,
+          icon: Sprout,
+          priorityAt: 10,
+        }),
+      ],
+    },
+  ];
+}
+
+function buildBimasMetricItem({
+  id,
+  label,
+  value,
+  icon,
+  priorityAt,
+}: {
+  id: string;
+  label: string;
+  value: number | null;
+  icon: ElementType;
+  priorityAt?: number;
+}): BimasServiceMetric {
+  return {
+    id,
+    label,
+    value: formatPercentMetric(value),
+    icon,
+    ...bimasMetricStatus(value, priorityAt),
+  };
+}
+
+function bimasMetricStatus(
+  value: number | null,
+  priorityAt?: number,
+): Pick<BimasServiceMetric, "status" | "tone"> {
+  if (value === null) return { status: "Belum tersedia", tone: "warning" };
+  if (priorityAt !== undefined && value <= priorityAt) {
+    return { status: "Prioritas", tone: "danger" };
+  }
+  if (value >= 95) return { status: "Sangat Baik", tone: "success" };
+  if (value >= 85) return { status: "Baik", tone: "success" };
+  if (value >= 70) return { status: "Cukup", tone: "warning" };
+  if (value >= 50) return { status: "Perlu Peningkatan", tone: "warning" };
+
+  return { status: "Perlu Atensi", tone: "warning" };
+}
+
+function deriveBimasServiceMetrics(
+  datasetDetails: DashboardData["datasetDetails"],
+): BimasServiceMetrics {
+  const bimasDetails = datasetDetails.filter((detail) => {
+    return /pelayanan keagamaan|bidang bimas islam/i.test(
+      `${detail.category} ${detail.producer}`,
+    );
+  });
+  const kuaTipologyTable = findDetailByTableNumber(bimasDetails, "2.33");
+  const kuaConditionTable = findDetailByTableNumber(bimasDetails, "2.34");
+  const balaiNikahTable = findDetailByTableNumber(bimasDetails, "2.36");
+  const penghuluTable = findDetailByTableNumber(bimasDetails, "2.37");
+  const penghuluTrainingTable = findDetailByTableNumber(bimasDetails, "2.38");
+  const wakafStatusTable = findDetailByTableNumber(bimasDetails, "2.44");
+  const wakafUseTable = findDetailByTableNumber(bimasDetails, "2.45");
+  const wakafProductiveTable = findDetailByTableNumber(bimasDetails, "2.46");
+  const islamCounselorTables = ["2.8", "2.9", "2.10"]
+    .map((tableNumber) => findDetailByTableNumber(bimasDetails, tableNumber))
+    .filter((detail): detail is DatasetDetail => Boolean(detail));
+  const kuaTotal = sumDetailColumns(compactDetails([kuaTipologyTable]), ["jumlah"]);
+  const balaiNikahTotal = sumDetailColumns(compactDetails([balaiNikahTable]), ["jumlah"]);
+  const kuaLandCertified = sumDetailColumns(compactDetails([kuaConditionTable]), [
+    "bersertifikat",
+  ]);
+  const kuaLandUncertified = sumDetailColumns(compactDetails([kuaConditionTable]), [
+    "belumbersertifikat",
+  ]);
+  const kuaBuildingsGood = sumDetailColumns(compactDetails([kuaConditionTable]), ["baik"]);
+  const kuaBuildingsDamaged = sumDetailColumns(compactDetails([kuaConditionTable]), [
+    "rusakringan",
+    "rusakberat",
+  ]);
+  const counselorQualified = sumDetailColumns(islamCounselorTables, ["s1", ">s1"]);
+  const counselorTotal = sumDetailColumns(islamCounselorTables, ["jumlah"]);
+  const penghuluTrained = sumDetailColumns(compactDetails([penghuluTrainingTable]), ["jumlah"]);
+  const penghuluTotal = sumDetailColumns(compactDetails([penghuluTable]), ["jumlah"]);
+  const certifiedWakaf = sumDetailColumns(compactDetails([wakafStatusTable]), [
+    "bersertifikat(lokasi)",
+  ]);
+  const wakafTotal = sumDetailColumns(compactDetails([wakafStatusTable]), [
+    "tanahwakaf(lokasi)",
+  ]);
+  const productiveWakaf = sumDetailColumns(compactDetails([wakafProductiveTable]), [
+    "jumlah",
+  ]);
+  const wakafUseTotal = sumDetailColumns(compactDetails([wakafUseTable]), ["jumlah"]);
+  const years = [
+    kuaTipologyTable,
+    kuaConditionTable,
+    balaiNikahTable,
+    penghuluTable,
+    penghuluTrainingTable,
+    wakafStatusTable,
+    wakafUseTable,
+    wakafProductiveTable,
+    ...islamCounselorTables,
+  ]
+    .filter((detail): detail is DatasetDetail => Boolean(detail))
+    .map((detail) => detail.year)
+    .filter((year) => Number.isFinite(year));
+
+  return {
+    balaiNikah: percentOrNull(balaiNikahTotal, kuaTotal),
+    kuaLandCertified: percentOrNull(kuaLandCertified, kuaLandCertified + kuaLandUncertified),
+    kuaBuildingsGood: percentOrNull(kuaBuildingsGood, kuaBuildingsGood + kuaBuildingsDamaged),
+    islamCounselorQualified: percentOrNull(counselorQualified, counselorTotal),
+    trainedPenghulu: percentOrNull(penghuluTrained, penghuluTotal),
+    certifiedWakaf: percentOrNull(certifiedWakaf, wakafTotal),
+    productiveWakaf: percentOrNull(productiveWakaf, wakafUseTotal || wakafTotal),
+    year: years.length ? Math.max(...years) : null,
+    source: "Bidang Bimas Islam",
+  };
 }
 
 function deriveMadrasahPerformanceMetrics(
@@ -2198,6 +2784,14 @@ function deriveMadrasahPerformanceMetrics(
   };
 }
 
+function findDetailByTableNumber(details: DatasetDetail[], tableNumber: string) {
+  return details.find((detail) => detail.tableNumber === tableNumber) ?? null;
+}
+
+function compactDetails(details: Array<DatasetDetail | null | undefined>) {
+  return details.filter((detail): detail is DatasetDetail => Boolean(detail));
+}
+
 function sumDetailColumns(details: DatasetDetail[], headerLabels: string[]) {
   return details.reduce((total, detail) => {
     const indexes = headerLabels
@@ -2256,23 +2850,6 @@ function toMetricNumber(value: string | number | undefined) {
 
 function percentOrNull(value: number, total: number) {
   return total > 0 ? (value / total) * 100 : null;
-}
-
-function buildSparklinePoints(values: number[]) {
-  if (!values.length) return "";
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-
-  return values
-    .map((value, index) => {
-      const x = values.length === 1 ? 60 : (index / (values.length - 1)) * 112 + 4;
-      const y = 38 - ((value - min) / range) * 30;
-
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
 }
 
 function AwardsSection({
@@ -2447,11 +3024,10 @@ function AwardShowcase({
               key={`${award.collectionId}-dot-${award.id}`}
               type="button"
               onClick={() => setActiveIndex(index)}
-              className={`h-2.5 rounded-full transition-all ${
-                index === activeIndex
-                  ? "w-9 bg-emerald-700"
-                  : "w-2.5 bg-emerald-900/15 hover:bg-emerald-800/35"
-              }`}
+              className={`h-2.5 rounded-full transition-all ${index === activeIndex
+                ? "w-9 bg-emerald-700"
+                : "w-2.5 bg-emerald-900/15 hover:bg-emerald-800/35"
+                }`}
               aria-label={`Tampilkan penghargaan ${index + 1}`}
               aria-current={index === activeIndex}
             />
@@ -2766,9 +3342,9 @@ export function SlideShowExperience({
 
     return firstCollection && firstItem
       ? {
-          collection: firstCollection,
-          item: firstItem,
-        }
+        collection: firstCollection,
+        item: firstItem,
+      }
       : null;
   }, [data.awardCollections]);
   const executiveConclusions = useMemo(() => {
@@ -2804,19 +3380,18 @@ export function SlideShowExperience({
   ]);
   const updatedLabel = lastUpdated
     ? lastUpdated.toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
     : "sinkron otomatis";
 
   return (
     <main
-      className={`executive-monitor-backdrop ${
-        activeSlide === 2 || activeSlide === 5
-          ? "executive-monitor-photo-backdrop"
-          : ""
-      }`}
+      className={`executive-monitor-backdrop ${activeSlide === 2 || activeSlide === 5
+        ? "executive-monitor-photo-backdrop"
+        : ""
+        }`}
       role="main"
     >
       <div className="executive-monitor-shell">
@@ -2866,9 +3441,8 @@ export function SlideShowExperience({
               <button
                 key={slide}
                 type="button"
-                className={`executive-monitor-tab ${
-                  index === activeSlide ? "executive-monitor-tab-active" : ""
-                }`}
+                className={`executive-monitor-tab ${index === activeSlide ? "executive-monitor-tab-active" : ""
+                  }`}
                 onClick={() => setActiveSlide(index)}
               >
                 {slide}
@@ -3027,40 +3601,40 @@ export function SlideShowExperience({
                     const tone = serviceTone(indicator.category);
 
                     return (
-                    <div
-                      key={indicator.id}
-                      className={`executive-monitor-tile executive-indicator-tile tile-tone-${index % 4}`}
-                    >
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span
-                          className={`summary-service-icon summary-tone-${tone}`}
-                          style={toneStyle(tone)}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <div className="min-w-0">
-                        <p
-                          className={`text-xs font-semibold uppercase tracking-wide summary-text-${tone}`}
-                          style={toneStyle(tone)}
-                        >
-                          {indicator.category}
-                        </p>
-                        <h4 className="mt-1 font-bold leading-tight text-white">
-                          {indicator.name}
-                        </h4>
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/65">
-                          {indicator.description}
-                        </p>
+                      <div
+                        key={indicator.id}
+                        className={`executive-monitor-tile executive-indicator-tile tile-tone-${index % 4}`}
+                      >
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span
+                            className={`summary-service-icon summary-tone-${tone}`}
+                            style={toneStyle(tone)}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p
+                              className={`text-xs font-semibold uppercase tracking-wide summary-text-${tone}`}
+                              style={toneStyle(tone)}
+                            >
+                              {indicator.category}
+                            </p>
+                            <h4 className="mt-1 font-bold leading-tight text-white">
+                              {indicator.name}
+                            </h4>
+                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/65">
+                              {indicator.description}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold text-white">
+                            {formatNumber(indicator.value)}
+                            {indicator.unit === "persen" ? "%" : ""}
+                          </p>
+                          <p className="text-xs text-white/60">Tahun {indicator.year}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-bold text-white">
-                          {formatNumber(indicator.value)}
-                          {indicator.unit === "persen" ? "%" : ""}
-                        </p>
-                        <p className="text-xs text-white/60">Tahun {indicator.year}</p>
-                      </div>
-                    </div>
                     );
                   })}
                 </div>
@@ -3238,11 +3812,10 @@ export function SlideShowExperience({
                   </div>
 
                   <div
-                    className={`executive-agenda-list ${
-                      agendaCount <= 4
-                        ? "executive-agenda-list-balanced"
-                        : "executive-agenda-list-scroll"
-                    }`}
+                    className={`executive-agenda-list ${agendaCount <= 4
+                      ? "executive-agenda-list-balanced"
+                      : "executive-agenda-list-scroll"
+                      }`}
                   >
                     {data.executiveSchedules.map((schedule, index) => (
                       <div
