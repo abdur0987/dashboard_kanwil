@@ -1,4 +1,4 @@
-import { SlideShowExperience } from "@/components/dashboard/dashboard-experience";
+import { SlideShowExperience } from "@/components/slideshow/slideshow-experience";
 import { getDashboardData } from "@/lib/services/dashboard";
 
 export const dynamic = "force-dynamic";
