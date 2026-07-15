@@ -49,12 +49,12 @@ type PresentationTheme =
 
 type PresentationSlide = {
   id:
-    | "overview"
-    | "performance"
-    | "ips"
-    | "agenda"
-    | "news"
-    | "achievement";
+  | "overview"
+  | "performance"
+  | "ips"
+  | "agenda"
+  | "news"
+  | "achievement";
   label: string;
   theme: PresentationTheme;
   durationMs: number;
@@ -127,7 +127,7 @@ export function SlideShowExperience({
       : "Terkini";
     const average = indicators.length
       ? indicators.reduce((total, indicator) => total + indicator.value, 0) /
-        indicators.length
+      indicators.length
       : 0;
 
     return {
@@ -185,8 +185,8 @@ export function SlideShowExperience({
   }, [data.executiveSchedules, focusSchedule]);
   const focusScheduleMapUrl = focusSchedule?.location
     ? "https://www.google.com/maps?q=" +
-      encodeURIComponent(focusSchedule.location + ", Lampung") +
-      "&z=15&output=embed"
+    encodeURIComponent(focusSchedule.location + ", Lampung") +
+    "&z=15&output=embed"
     : "";
 
   const awardHighlights = useMemo(() => {
@@ -310,7 +310,7 @@ export function SlideShowExperience({
     (index: number) => {
       setActiveIndex(
         ((index % presentationSlides.length) + presentationSlides.length) %
-          presentationSlides.length,
+        presentationSlides.length,
       );
       restartProgress();
     },
@@ -336,7 +336,7 @@ export function SlideShowExperience({
 
       setActiveAwardIndex(
         ((index % awardHighlights.length) + awardHighlights.length) %
-          awardHighlights.length,
+        awardHighlights.length,
       );
     },
     [awardHighlights.length],
@@ -531,23 +531,23 @@ export function SlideShowExperience({
 
   const clockLabel = currentTime
     ? currentTime.toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      hour: "2-digit",
+      minute: "2-digit",
+    })
     : "--:--";
   const dateLabel = currentTime
     ? currentTime.toLocaleDateString("id-ID", {
-        weekday: "long",
-        day: "2-digit",
-        month: "short",
-      })
+      weekday: "long",
+      day: "2-digit",
+      month: "short",
+    })
     : "Waktu Indonesia Barat";
   const updatedLabel = lastUpdated
     ? "Diperbarui " +
-      lastUpdated.toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    lastUpdated.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
     : "Sinkron otomatis";
 
   let slideContent: ReactNode;
@@ -559,15 +559,14 @@ export function SlideShowExperience({
           <div className={styles.primaryCopy}>
             <p className={styles.eyebrow}>
               <Sparkles aria-hidden="true" />
-              Ringkasan eksekutif · {latestDataYear}
+              Dashboard Interaktif {latestDataYear}
             </p>
             <h1 className={styles.heroTitle}>
-              Satu layar untuk
-              <span> membaca Lampung.</span>
+              Dashboard Kanwil
+              <span> Provinsi Lampung</span>
             </h1>
             <p className={styles.heroDescription}>
-              Informasi kinerja, data, agenda, dan kabar Kanwil bergerak otomatis
-              dalam satu cerita yang mudah dipahami.
+              Dashboard Interaktif Kanwil Kementerian Agama Provinsi Lampung
             </p>
             <div className={styles.metricRow}>
               <DisplayMetric
