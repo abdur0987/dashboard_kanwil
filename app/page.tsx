@@ -17,7 +17,14 @@ export default async function Home() {
       <DashboardTopShell contact={publicData.contact} />
       <PublicDataGovernanceBanner rawData={rawData} />
       <ServiceAchievementShowcase />
-      <div className="[&>main>:nth-child(1)]:hidden [&>main>:nth-child(2)]:hidden [&>main>:nth-child(3)]:hidden">
+      <div className="dashboard-content-after-redesign">
+        <style>{`
+          .dashboard-content-after-redesign > main > :nth-child(1),
+          .dashboard-content-after-redesign > main > :nth-child(2),
+          .dashboard-content-after-redesign > main > :nth-child(3) {
+            display: none;
+          }
+        `}</style>
         <DashboardExperience data={publicData} />
       </div>
     </>
